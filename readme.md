@@ -1,11 +1,12 @@
 # SEBASTIAN
+that's my last name
 
 ## What am I?
 I'm a dinky little side-project PHP framework written because I'm too lazy to use other free, easy to access, open source frameworks.
 
 I spun out of a work term topic paper, and ended up a pretty decent, in my opinion, solution.
 
-## to use
+### How do I work?
 
 ```php
 	$envConfig = yaml_parse_file(__DIR__ . "/../config/env.yaml");
