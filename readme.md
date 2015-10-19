@@ -80,6 +80,7 @@ entity:
 
 ```yaml
 # orm_config.yaml
+
 SomeEntity:
     table: some_entity_table
     keys: [id] # primary keys

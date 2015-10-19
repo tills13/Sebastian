@@ -23,20 +23,25 @@
 		const REQUEST_TYPE_VIEW = 2;
 
 		public static function fromGlobals() {
-			$request = new Request();
+			$request = new Request($_GET, $_POST, $_COOKIE, $_SERVER, $_FILES);
 			return $request;
 		}
 
-		protected function __construct() {
-			$this->get = $_GET;
-			$this->post = $_POST;
+		protected function __construct($get = [], $post = [], $cookies = [], $server = [], $files = []) {
+			$this->get = $get;
+			$this->post = $post;
+			$this->cookies = $cookies;
+			$this->server = $server;
+			$this->files = $files;
+			$this->headers = array_filter($this->server, function($index) { 
+				return (strpos($index, "HTTP_") === 0);
+			})
 
 			if (strstr($_SERVER['REQUEST_URI'], '?')) {
 				$this->route = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], "?"));
 			} else $this->route = $_SERVER['REQUEST_URI'];
 
 			$this->route = urldecode($this->route);
-			$this->method = $_SERVER['REQUEST_METHOD'];
 			$this->type = Request::REQUEST_TYPE_DEFAULT;
 			$this->referrer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
 			
@@ -69,18 +74,6 @@
 			return $default;
 		}
 
-		// post only
-		public function form($keyword, $default = null) {
-			if (in_array($keyword, array_keys($this->post))) return $this->post[$keyword];
-			return $default;
-		}
-
-		// get only
-		public function query($keyword, $default = null) {
-			if (in_array($keyword, array_keys($this->get))) return $this->get[$keyword];
-			return $default;
-		}
-
 		public function remove($keyword) {
 			if (in_array($keyword, array_keys($this->post))) unset($this->post[$keyword]);
 			elseif (in_array($keyword, array_keys($this->get))) unset($this->get[$keyword]);
@@ -90,16 +83,14 @@
 			return $this->route;
 		}
 
-		public function method() {
-			return $this->method;
+		public function method($is = null) {
+			if (!is_null($is)) return (strtolower($this->method()) == strtolower($method));
+
+			return $this->server['REQUEST_METHOD'];
 		}
 
 		public function has($keyword) {
 			return in_array($keyword, array_keys($this->get)) || in_array($keyword, array_keys($this->post));
-		}
-
-		public function is($method) {
-			return strtolower($this->method()) == strtolower($method);
 		}
 
 		public function isXmlHttpRequest() {
@@ -110,7 +101,7 @@
 			return Utils::requestIsMobile();
 		}
 
-		public function getAttributes() {
+		public function params() {
 			return array_merge($this->post, $this->get);
 		}
 

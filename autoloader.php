@@ -4,10 +4,6 @@
 	$map = [];
 
 	$autoLoader = function($className) use ($map, $overrides) {
-		if (isset($overrides[$className])) {
-			$className = $overrides[$className];
-		}
-
 		$className = explode('\\', $className);
 		$rootNamespace = $className[0];
 
@@ -16,7 +12,7 @@
 		if (isset($map[$rootNamespace])) {
 			$path = __DIR__ . "/../{$map[$rootNamespace]}/{$className}.php";
 		} else {
-			$path = __DIR__ . "/{$className}.php";
+			$path = __DIR__ . "{$rootNamespace}/src/{$className}.php";
 		}
 
 		require_once($path);

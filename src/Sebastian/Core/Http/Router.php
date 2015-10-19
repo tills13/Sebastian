@@ -4,10 +4,11 @@
 	use Sebastian\SEBASTIAN_ROOT;
 	use Sebastian\Core\Exception\PageNotFoundException;
 
-	use Sebastian\Core\Session\Session;
 	use Sebastian\Core\Entity\Entity;
 	use Sebastian\Core\Context\Context;
 	use Sebastian\Core\Database\EntityManager;
+	use Sebastian\Core\Http\Request;
+	use Sebastian\Core\Session\Session;
 
 	use Sebastian\Core\Utility\Logger;
 	use Sebastian\Core\Utility\Utils;
@@ -20,11 +21,20 @@
 	 * @author Tyler <tyler@sbstn.ca>
 	 * @since Oct. 2015
 	 */
-	class Router extends Context {
+	class Router {
 		public static $tag = "ROUTER";
 		public $routes;
+
+		protected $context;
 		protected static $logger;
 
+		/**
+		 * attempts to load the router (plus routes) from cache, if it's not
+		 * cached, load it normally
+		 * 
+		 * @param  Kernel $context application context
+		 * @return Router the router
+		 */
 		public static function getRouter($context) {
 			$router = new Router($context);
 			$router->init($context);
@@ -33,7 +43,8 @@
 
 			if ($cm->isCached($router)) {
 				$router = $cm->load($router);
-				$router->setContext($context);
+				// the context will be incorrect
+				$router->setContext($context); 
 			} else {
 				$router->loadRoutes();
 				$cm->cache($router);
@@ -42,10 +53,13 @@
 			return $router;
 		}
 
-		public function __construct($context) {
-			parent::__construct($context);
-		}
+		protected function __construct($context) {}
 
+		/**
+		 * initialize the router object
+		 * @param  Kernel $app the application context, this should eventually be Application
+		 * @return void
+		 */
 		public function init($app) {
 			if (!Router::$logger) {
 				Router::$logger = new Logger($app->getLogFolder(), null, ['filename' => 'routing']);
@@ -57,6 +71,10 @@
 			$this->cm = $app->getCacheManager();
 		}
 
+		/**
+		 * load routes from the various routing files in component roots.
+		 * @return void
+		 */
 		public function loadRoutes() {
 			$components = $this->getContext()->getComponents();
 			$namespace = $this->getContext()->getAppNamespace();
@@ -77,29 +95,41 @@
 				}
 
 				$startTime = microtime(true);
-				$routesFile = yaml_parse_file($path);
+				$routes = yaml_parse_file($path);
 
-				if (!$routesFile) {
+				if (!$routes) {
 					Router::$logger->info("skipping empty file {$path}");
 					continue;
 				}
 
-				foreach ($routesFile as $name => $route) {
-					$this->addRoute($name, 
-									$route['route'], 
-									$route['controller'],
-									$route['method'],
-									array_values($route['methods']));
+				foreach ($routes as $name => $route) {
+					$this->addRoute(
+						$name,
+						$route['route'], 
+						$route['controller'],
+						$route['method'],
+						array_values($route['methods'])
+					);
 				}
 
-				$count = count($routesFile);
+				$count = count($routes);
 				$time = microtime(true) - $startTime;
 
 				Router::$logger->info("loaded {$count} routes from disk in {$time} µseconds");
 			}
 		}
 		
-		public function addRoute($name, $route, $controller, $method, $methods = ['GET','POST']) {
+		/**
+		 * add a route to the router
+		 * @param string $name       the name of the route
+		 * @param string $route      the route definition
+		 * @param string $controller the controller defined by the route
+		 * @param string $method     the method in the controller to be used
+		 * @param array $methods     [get,post]
+		 */
+		public function addRoute($name, $route, $controller, $method, $methods) {
+			$methods = $methods ?: ['get','post'];
+
 			preg_match_all('/\{([^:\/]*?)(?:\:[^\/]*?)?\}/', $route, $args);
 			array_shift($args); // get rid of the full string
 			$args = $args[0]; // weird embedded array shit
@@ -120,6 +150,11 @@
 			];
 		}
 
+		/**
+		 * parse a route from its raw definition into regex
+		 * @param  string $route the route definition
+		 * @return string the regex'd route
+		 */
 		public function parseRoute($route) {
 			$route = preg_replace('/\//', '\/', $route);
 			$parsedRoute = preg_replace_callback('/\{([^:]*?)(?:\:(.*?))?\}/', function($matches) {
@@ -140,7 +175,13 @@
 			return $parsedRoute;
 		}
 
-		public function resolve($request) {
+		/**
+		 * resolve a request, returning the controller, method, and arguments
+		 * 
+		 * @param  Request $request the request
+		 * @return array the controller, method, and arguments
+		 */
+		public function resolve(Request $request) {
 			$mRoute = $request->route();
 			$components = $this->getContext()->getComponents(true);
 			
@@ -222,5 +263,13 @@
 
 		public function getRoutes() {
 			return $this->routes;
+		}
+
+		public function getContext() {
+			return $this->context;
+		}
+
+		public function setContext($context) {
+			$this->context = $context;
 		}
 	}
