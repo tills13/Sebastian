@@ -21,7 +21,7 @@
 		private $definitions; // orm definitions
 		private $repositories;
 
-		public function __construct($app, $definitions, $repositories) {
+		public function __construct($app, $definitions = [], $repositories = []) {
 			$this->context = $app;
 
 			$this->definitions = $definitions;
@@ -91,9 +91,9 @@
 
 		public function getRepository($class) {
 			if ($class instanceof Entity) $class = get_class($class);
-			if (!in_array($class, array_keys($this->repositories))) $class = $this->getBestGuessClass($class);
+			if (!in_array($class, array_keys($this->repositories ?: []))) $class = $this->getBestGuessClass($class);
 
-			if (in_array($class, array_keys($this->repositories))) {
+			if (in_array($class, array_keys($this->repositories ?: []))) {
 				$namespace = $this->context->getAppNamespace();
 				$entityInfo = $this->repositories[$class];
 
@@ -115,7 +115,10 @@
 							if (file_exists($possibleFile)) {
 								$path = str_replace('/', '', $path);
 								$repo = str_replace('/', '\\', $repo);
-								$repoClass = "\\{$namespace}\\{$path}\\{$repo}Repository";
+
+								if ($path != "") $path = "\\{$path}";
+
+								$repoClass = "\\{$namespace}{$path}\\{$repo}Repository";
 							}
 						}
 					}
@@ -132,7 +135,7 @@
 			$components = $this->context->getComponents();
 			$bestGuessSimpleClass = strstr($class, '\\') ? substr($class, strrpos($class, '\\') + 1) : $class;
 
-			$entities = $this->context->getConfig('entity');
+			$entities = $this->context->getConfig('entity', []);
 			if (in_array($class, array_keys($entities))) {
 				return $class;
 			}

@@ -35,7 +35,7 @@
 			$this->files = $files;
 			$this->headers = array_filter($this->server, function($index) { 
 				return (strpos($index, "HTTP_") === 0);
-			})
+			});
 
 			if (strstr($_SERVER['REQUEST_URI'], '?')) {
 				$this->route = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], "?"));
@@ -50,20 +50,9 @@
 				$this->type = Request::REQUEST_TYPE_JSON;
 			}
 
-			if ($this->query('view_only', false)) {
+			if ($this->get('view_only', false)) {
 				$this->type = Request::REQUEST_TYPE_VIEW;
 			}
-
-			$this->setAttr('request_ip', $_SERVER['REMOTE_ADDR']);
-			$this->setAttr('ua', $_SERVER['HTTP_USER_AGENT']);
-		}
-
-		public function setAttr($attr, $value, $override = false) {
-			$this->attrs[$attr]  = $value;
-		}
-
-		public function getAttr($attr, $default) {
-			return ($this->attrs[$attr] ?: $default);
 		}
 
 		// get and post

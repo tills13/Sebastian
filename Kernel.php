@@ -5,6 +5,7 @@
 	use Sebastian\Core\Database\Connection;
 	use Sebastian\Core\Database\EntityManager;
 
+	use Sebastian\Core\Http\Response\Response;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Http\Router;
 	use Sebastian\Core\Session\Session;
@@ -80,7 +81,7 @@
 		public function registerServices() {
 			$services = $this->getConfig('services');
 
-			foreach ($services as $name => $location) {
+			foreach ($services ?: [] as $name => $location) {
 				$this->startService($name, $location);
 			}
 		}
@@ -107,9 +108,10 @@
 				if ($response == null) throw new \Exception("Controller must return a response.", 1);
 				else return $response;
 			} catch (\Exception $e) {
-				var_dump("error: ".$e->getMessage());
+				//var_dump("error: ".$e->getMessage());
 				//$this->controller = new Controller($this);
 				//return $this->controller->renderError($e);
+				return new Response($e->getMessage());
 			}
 		}
 

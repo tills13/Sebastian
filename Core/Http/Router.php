@@ -40,10 +40,10 @@
 			$router->init($context);
 
 			$cm = $context->getCacheManager();
+			$cm->clear();
 
 			if ($cm->isCached($router)) {
 				$router = $cm->load($router);
-				// the context will be incorrect
 				$router->setContext($context); 
 			} else {
 				$router->loadRoutes();
@@ -69,6 +69,7 @@
 			$this->routes = [];
 			$this->em = $app->getEntityManager();
 			$this->cm = $app->getCacheManager();
+			$this->context = $app;
 		}
 
 		/**
