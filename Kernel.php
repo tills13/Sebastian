@@ -32,18 +32,21 @@
 		protected $session;
 		protected $services;
 
-		public function __construct($config = [], $ormConfig = []) {
+		public function __construct($env) {
 			define('SEBASTIAN_ROOT', __DIR__);
+
+			$this->env = $env;
+			$this->config = yaml_parse_file(\APP_ROOT . "/../config/config_{$this->env}.yaml") ?: [];
+			$this->ormConfig = yaml_parse_file(\APP_ROOT . "/../config/orm_config.yaml") ?: [];
 
 			//$this->application = new Application();
 			$this->components = [];
-			$this->config = $config;
 
 			$this->session = Session::fromGlobals($this);
 			$this->registerComponents();
 
 			$this->cacheManager = new CacheManager($this);
-			$this->entityManager = new EntityManager($this, $ormConfig, $this->getConfig('entity'));
+			$this->entityManager = new EntityManager($this, $this->ormConfig, $this->getConfig('entity'));
 			$this->connection = new Connection($this);
 
 			$this->router = Router::getRouter($this);
