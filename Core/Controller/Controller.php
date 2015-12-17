@@ -5,6 +5,7 @@
 
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Http\Response\Response;
+	use Sebastian\Core\Http\Response\JsonResponse;
 
 	use Sebastian\Core\Form\Form;
 

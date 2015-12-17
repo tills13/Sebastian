@@ -1,6 +1,7 @@
 <?php 
 	namespace Sebastian\Core\Form\FormPart;
 
+	use Sebastian\Core\Form\Form;
 	use Sebastian\Core\Http\Request;
 
 	/**
@@ -31,7 +32,7 @@
 		}
 
 		public function setName($name = null) {
-			if (!$name || $name == '') throw new Exception("name cannot be blank", 1);
+			if (!$name || $name == '') throw new \Exception("name cannot be blank", 1);
 			
 			$name = str_replace(" ", "_", $name);
 			$this->name = $name;

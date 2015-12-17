@@ -73,7 +73,7 @@
 		}
 
 		public function method($is = null) {
-			if (!is_null($is)) return (strtolower($this->method()) == strtolower($method));
+			if (!is_null($is)) return (strtolower($this->method()) == strtolower($is));
 
 			return $this->server['REQUEST_METHOD'];
 		}
