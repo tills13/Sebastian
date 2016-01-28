@@ -15,6 +15,7 @@
 		protected $mode = 'select';
 		public $select = [];
 		public $tables = [];
+		public $joins = [];
 		public $where = [];
 		public $whereMode = 'and';
 		public $groupBy = [];

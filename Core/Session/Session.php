@@ -3,7 +3,6 @@
 
 	use Sebastian\Core\Entity\User;
 	use Sebastian\Core\Utility\Utils;
-	use Sebastian\Core\Context\Context;
 	
 	/**
 	 * Session
@@ -23,7 +22,7 @@
 		}
 
 		protected function __construct($app) {
-			session_start();
+			$this->start();
 
 			$this->context = $app;
 			$token = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
@@ -36,6 +35,12 @@
 				$expire = time() + 60 * 60 * 24 * 5; // five days
 				setcookie('token', $user->getToken(), $expire);
 			}
+
+			//$this->set('session_user', 'tullsy');
+		}
+
+		public function start() {
+			session_start();
 		}
 
 		public function reload() {

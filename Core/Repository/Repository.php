@@ -4,6 +4,8 @@
 	use Sebastian\Core\Utility\Logger;
 	use Sebastian\Core\Utility\Utils;
 
+	use Sebastian\Core\Cache\CacheManager;
+
 	/**
 	 * Repository
 	 *
@@ -19,13 +21,22 @@
 		protected $class;
 		protected $definition;
 		protected $context;
+
 		protected $_em;
+		protected static $_objectReferenceCache;
 		
 		public function __construct($app, $em, $class = null) {
 			$this->context = $app;
 			$this->_em = $em;
 			$this->class = $class;
 			$this->initCalled = false;
+
+			if (Repository::$_objectReferenceCache == null) {
+				Repository::$_objectReferenceCache = new CacheManager(
+					$this->context,
+					CacheManager::ARRAY_DRIVER
+				);	
+			}
 
 			// convenience
 			$this->cacheManager = $app->getCacheManager();
@@ -73,14 +84,54 @@
 			}
 
 			$skeleton = $this->initializeObject($initialParams);
-			// var_dump(get_class($skeleton)); print "<br />";
-			$qb = $this->_em->getQueryBuilder();
 
-			if ($this->cacheManager->isCached($skeleton)) {
+			$orcKey = self::$_objectReferenceCache->generateKey($skeleton);
+			if (self::$_objectReferenceCache->isCached($orcKey)) {
+				return self::$_objectReferenceCache->load($orcKey);
+			} else {
+				self::$_objectReferenceCache->cache(null, $skeleton);	
+			}
+
+			$qb = $this->_em->getQueryBuilder();
+			/*$tables = $this->computeJoinColumns();
+
+			$qb = $qb->select(implode(',', $tables[$this->getTable()]));
+
+			foreach ($tables as $table) {
+				$qb->join()
+			}
+
+			/*foreach ($fields as $field) {
+				print_r($field);
+			}*/
+
+			//die();
+
+
+
+			//$cols = array_filter($fields, function)
+
+
+
+
+
+			//$qb = $qb->select()
+
+
+
+
+
+
+
+
+
+
+
+			/*if ($this->cacheManager->isCached($skeleton)) {
 				$object = $this->cacheManager->load($skeleton);
 				$object->reset();
 				return $object;
-			}
+			}*/
 
 			// columns in the object's table
 			$commonAttributes = array_filter($fields, function($field) {
@@ -105,7 +156,7 @@
 			}, $cols);
 
 			$qb = $qb->select(implode(',', $cols))
-					   ->from($this->getTable());
+					 ->from($this->getTable());
 
 			// todo use bind(...)
 			foreach ($keys as $key) {
@@ -163,7 +214,7 @@
 			}
 
 			$skeleton->reset(); // clears entity's 'touched' parameter
-			$this->cacheManager->cache($skeleton);
+			//$this->cacheManager->cache($skeleton);
 
 			return $skeleton;
 		}
@@ -207,6 +258,33 @@
 			}
 
 			return $return;
+		}
+
+		protected function computeJoinColumns(&$joins = []) {
+			$fields = $this->definition['fields'];
+
+			$mJoins = array_filter($fields, function($field) {
+				return isset($field['relation']) && $field['relation'] == 'one';
+			});
+
+			$mJoins = array_unique($mJoins);
+
+			foreach ($mJoins as &$join) {
+				$entity = $join['entity'];
+
+				if (in_array($entity, array_keys($joins))) continue;
+
+				print ($entity);
+
+				$repo = $this->_em->getRepository($entity);
+
+				$nonFks = $this->_em->getNonForeignColumns($entity);
+				$joins[$entity] = $nonFks;
+
+				$repo->computeJoinColumns($joins);
+			}
+
+			return $joins;
 		}
 
 		// todo refactor
@@ -441,8 +519,6 @@
 		public function forEntity($entity) {
 			return $this->_em->getRepository($entity);
 		}
-
-		// GETTERS
 		
 		public function getConfig($path) {
 			return $this->_em->getConfig($this->class);
@@ -497,21 +573,7 @@
 			return $object;
 		}
 
-		// get results
-
-		public function getResult($results = []) {
-			//foreach ($results as &$mResult) {
-				//$mResult = $this->build($mResult);
-			//}
-
-			return $results;
-		}
-
-		public function getSingleResult($results) {
-
-		}
-
-		public function getSingleColumnResult($result) {
-
+		public function getConnection() {
+			return $this->_em->getConnection();
 		}
 	}

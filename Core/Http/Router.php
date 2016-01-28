@@ -5,7 +5,6 @@
 	use Sebastian\Core\Exception\PageNotFoundException;
 
 	use Sebastian\Core\Entity\Entity;
-	use Sebastian\Core\Context\Context;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Session\Session;
@@ -40,15 +39,15 @@
 			$router->init($context);
 
 			$cm = $context->getCacheManager();
-			$cm->clear();
+			//$cm->clear();
 
-			if ($cm->isCached($router)) {
-				$router = $cm->load($router);
-				$router->setContext($context); 
-			} else {
+			//if ($cm->isCached($router)) {
+			//	$router = $cm->load($router);
+				//$router->setContext($context); 
+			//} else {
 				$router->loadRoutes();
-				$cm->cache($router);
-			}
+				//$cm->cache($router);
+			//}
 
 			return $router;
 		}
@@ -81,7 +80,7 @@
 			$namespace = $this->getContext()->getAppNamespace();
 
 			$paths = [
-				\APP_ROOT . "/config/routing.yaml", // master routing file, if required
+				\APP_ROOT . "/../config/routing.yaml", // master routing file, if required
 				SEBASTIAN_ROOT . "/Core/Resources/config/routing.yaml" // internal for css/js/font/assets
 			]; // add default routes
 
@@ -103,14 +102,16 @@
 					continue;
 				}
 
-				foreach ($routes as $name => $route) {
-					$this->addRoute(
-						$name,
-						$route['route'], 
-						$route['controller'],
-						$route['method'],
-						array_values($route['methods'])
-					);
+				foreach ($routes as $name => $mRoute) {
+					// required fields
+					$route = $mRoute['route'];
+					$controller = $mRoute['controller'];
+					$method = $mRoute['method'];
+
+					// optional
+					$methods = isset($mRoute['methods']) ? array_values($mRoute['methods']) : ['GET', 'POST'];
+
+					$this->addRoute($name, $route, $controller, $method, $methods);
 				}
 
 				$count = count($routes);
