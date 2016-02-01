@@ -11,11 +11,7 @@ I spun out of a work term topic paper, and ended up a pretty decent, in my opini
 ```php
 require_once(__DIR__ . '/../vendor/autoload.php');
 
-$envConfig = yaml_parse_file(__DIR__ . "/../config/env.yaml");
-$config = yaml_parse_file(__DIR__ . "/../config/config_{$envConfig['environment']}.yaml");
-$ormConfig = yaml_parse_file(__DIR__ . "/../config/orm_config.yaml");
-
-$app = new Kernel($config, $orgConfig);
+$app = new Kernel("prod"); // or load the env from a config (see env.yaml below)
 $request = Request::fromGlobals();
 $response = $app->handleRequest($request);
 $response->send();
@@ -37,34 +33,27 @@ environment: prod
 application:
     name: example_app
     namespace: ExampleApp
+    app_class: ExampleApp
     debug: false
 
 database:
-    hostname: hostname
     dbname: dbname
+    hostname: hostname
     port: 5432
     username: postgres
     password: password
-    connection:
-        lazy: true
-        tagging: true
-
-orm:
-    lazy: false # don't know about this, yet
 
 cache:
-    enabled: true
+    #driver: Sebastian\Core:NullDriver
+    driver: Sebastian\Core:APCUDriver
+    key_generation_strategy: 
+        object: '{class}_{component}_{id}' # defaults
+        other: '{hash}' # defaults
 
-services:
-	# service name: [optional component namespace:][servicename]
-    some_service: Common:SomeService
-
-# components
-components:
-    Default:
-        weight: 0
-        requirements: []
-        path: /Common
+service:
+    test_service:
+        class: 'Common:Service\TestService'
+        params: { '@request' } # coming, not quite yet
 
 # entities and repos
 entity:
@@ -79,7 +68,7 @@ entity:
 ```
 
 ```yaml
-# orm_config.yaml
+# orm.yaml
 
 SomeEntity:
     table: some_entity_table
@@ -102,6 +91,7 @@ SomeEntity:
             with: id
             relation: one
 
+# the relation definitions are still in flux
 # ...
 ```
 
