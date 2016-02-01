@@ -1,6 +1,8 @@
 <?php
 	namespace Sebastian\Core\Http\Response;
 
+	use Sebastian\Component\Collection\Collection;
+
 	/**
 	 * Response
 	 * 
@@ -22,7 +24,7 @@
 		protected $responseCode;
 
 		public function __construct($content = null, $responseCode = null) {
-			$this->headers = [];
+			$this->headers = new Collection();
 			
 			$this->content = $content;
 			$this->responseCode = $responseCode;
@@ -40,10 +42,7 @@
 		}
 
 		public function sendHeaders() {
-			foreach ($this->headers as $header) {
-				$field = $header['field'];
-				$value = $header['value'];
-
+			foreach ($this->headers as $field => $value) {
 				header("{$field}: {$value}");
 			}
 		}
@@ -60,11 +59,7 @@
 
 		public function setHeader($field, $value, $applyNow = false) {
 			if (!$applyNow) {
-				$this->headers[$field] = [
-					'field' => $field,
-					'value' => $value,
-					'replace' => false
-				];
+				$this->headers->set($field, $value);
 			} else {
 				header("{$field}: {$value}");
 			}

@@ -1,8 +1,8 @@
 <?php
-    namespace Sebastian\Core\Utility;
+    namespace Sebastian\Component\Logging;
 
-    use DateTime;
-    use RuntimeException;
+    use Sebastian\Core\Application;
+    use Sebastian\Core\Configuration\Configuration;
 
     /**
      * Logger
@@ -49,11 +49,22 @@
         private $lastLine = '';
         private $defaultPermissions = 0777;
 
-        public function __construct($logDirectory, $logLevelThreshold = Logger::DEBUG, $options = []) {
-            $this->logLevelThreshold = $logLevelThreshold;
-            $this->options = array_merge($this->options, $options);
+        //public function __construct($logDirectory, $logLevelThreshold = Logger::DEBUG, $options = []) {
+        public function __construct($context, Configuration $config = null) {
+            $this->context = $context;
 
-            $logDirectory = rtrim($logDirectory, DIRECTORY_SEPARATOR);
+            if (!$config) $config = new Configuration();
+            $this->config = $config->extend([
+                'directory' => $context->getDefaultLogPath(),
+                'filename' => $context->getDefaultLogFilename(),
+                'threshold' => 6
+            ]);
+
+            $logDirectory = rtrim(
+                $this->config->get('directory') . $this->config->get('filename'),
+                DIRECTORY_SEPARATOR
+            );
+
             if (!file_exists($logDirectory)) {
                 mkdir($logDirectory, $this->defaultPermissions, true);
             }
@@ -65,14 +76,14 @@
                 $this->setLogFilePath($logDirectory);
 
                 if (file_exists($this->logFilePath) && !is_writable($this->logFilePath)) {
-                    throw new RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
+                    throw new \RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
                 }
 
                 $this->setFileHandle('a');
             }
 
             if (!$this->fileHandle) {
-                throw new RuntimeException('The file could not be opened. Check permissions.');
+                throw new \RuntimeException('The file could not be opened. Check permissions.');
             }
         }
 
@@ -113,9 +124,9 @@
         }
 
         public function log($level, $message) {
-            //if ($this->logLevels[$this->logLevelThreshold] < $this->logLevels[$level]) {
-            //   return;
-            //}
+            if ($this->logLevels[$this->logLevelThreshold] < $this->logLevels[$level]) {
+               return;
+            }
 
             $message = $this->formatMessage($level, $message);        
             $this->write($message);
@@ -124,7 +135,7 @@
         public function write($message) {
             if (null !== $this->fileHandle) {
                 if (fwrite($this->fileHandle, $message) === false) {
-                    throw new RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
+                    throw new \RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
                 } else {
                     $this->lastLine = trim($message);
                     $this->logLineCount++;
@@ -155,7 +166,7 @@
         private function getTimestamp() {
             $originalTime = microtime(true);
 
-            $date = new DateTime(date('Y-m-d H:i:s', $originalTime));
+            $date = new \DateTime(date('Y-m-d H:i:s', $originalTime));
 
             return $date->format($this->options['dateFormat']);
         }

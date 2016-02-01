@@ -1,7 +1,10 @@
 <?php
 	namespace Sebastian\Core\Database\Query;
 
-	class Query {
+	use Sebastian\Component\Collection\Collection;
+	use Sebastian\Core\Database\Query\Part\Part;
+
+	class Query implements Part {
 		const TYPE_SELECT = 0;
 		const TYPE_DELETE = 1;
 		const TYPE_UPDATE = 2;
@@ -21,29 +24,99 @@
 			'limit'		=> null
 		];
 
+
+
+		protected $columns;
+		protected $columnAliases;
+
+		protected $froms;
+
+		protected $joins;
+
+		public function __construct() {
+			$this->type = self::TYPE_SELECT;
+
+			$this->columns = new Collection();
+			$this->columnAliases = new Collection();
+			$this->froms = new Collection();
+
+			$this->joins = new Collection();
+		}
+
+		public function select(array $columns) {
+			$this->columns->extend($columns);
+		}
+
+		public function selectColumn($column, $alias) {
+			$this->columns->set(null, $column);
+			$this->columnAliases->set($column, $alias);
+		}
+
+		public function from(Part $from) {
+			$this->froms->set(null, $from);
+		}
+
+		public function join($join) {
+			$key = $join->getTable();
+			$key = preg_replace('/\./', '_', $key);
+			$this->joins->set($key, $join);
+		}
+
+
+
+
+
+
+		public function getColumns() {
+			return $this->columns;
+		}
+
+		public function getColumnAliases() {
+			return $this->columnAliases;
+		}
+
+		public function getType() {
+			return $this->type;
+		}
+
+		public function setType($type) {
+			$this->type = $type;
+		}
+
 		public function __toString() {
 			switch ($this->type) {
 				case self::TYPE_SELECT:
-					$query  = "SELECT\n";
-					$query .= "\t" . implode($this->parts['select'], ",\n\t") . "\n";
-					$query .= "FROM {$this->parts['from'][0]}" . (($this->parts['from'][1] != null) ? " AS {$this->parts['from'][1]}" : "") . "\n";
+					$query  = "SELECT \n";
+					$query .= $this->columnsToString() . "\n";
+					$query .= "FROM " . $this->fromsToString() . "\n";
 
-					foreach ($this->parts['join'] as $join) {
-						$query .= "{$join['type']} JOIN {$join['table']}" . ($join['alias'] == null ? "" : " AS {$join['alias']} ");
-						$query .= "{$join['conditionType']} " . implode($join['condition'], ' AND ') . "\n";
+					foreach ($this->joins as $m => $join) {
+						$query .= $join . "\n";
 					}
-
-					foreach ($this->parts['where'] as $where) {
-						
-					}
-
-					$query .= (count($this->parts['groupBy']) > 0) ? ("GROUP BY\n\t" . implode($this->parts['groupBy'], ",\n\t") . "\n") : "";
-					$query .= (count($this->parts['orderBy']) > 0) ? ("ORDER BY\n\t" . implode($this->parts['orderBy'], ",\n\t") . "\n") : "";
-
-					$query .= ($this->parts['limit'] == null) ? "" : "LIMIT {$this->parts['limit']}" . "\n";
-					$query .= ($this->parts['offset'] == null) ? "" : "OFFSET {$this->parts['offset']}" . "\n";
 			}
 
 			return $query;
+		}
+
+		protected function columnsToString() {
+			$aliases = $this->columnAliases;
+			$cols = array_map(function($column) use ($aliases) {
+				if ($aliases->has($column)) {
+					return "{$column} AS {$aliases->get($column)}";
+				} else return $column;
+			}, $this->columns->toArray());
+
+			return implode(',', $cols);
+		}
+
+		protected function fromsToString() {
+			/*$aliases = $this->tableAliases;
+			$tables = array_map(function($table) use ($aliases) {
+				if ($aliases->has($table)) {
+					return "{$table} AS {$aliases->get($table)}";
+				} else return $table;
+			}, $this->tables->toArray());*/
+
+			return implode(',', $this->froms->toArray());
 		}
 	}

@@ -1,6 +1,7 @@
 <?php
 	namespace Sebastian\Core\Http;
 
+	use Sebastian\Component\Collection\Collection;
 	use Sebastian\Core\Utility\Utils;
 	
 	/**
@@ -28,13 +29,13 @@
 		}
 
 		protected function __construct($get = [], $post = [], $cookies = [], $server = [], $files = []) {
-			$this->get = $get;
-			$this->post = $post;
-			$this->cookies = $cookies;
-			$this->server = $server;
-			$this->files = $files;
-			$this->headers = array_filter($this->server, function($index) { 
-				return (strpos($index, "HTTP_") === 0);
+			$this->get = new Collection($get);
+			$this->post = new Collection($post);
+			$this->cookies = new Collection($cookies);
+			$this->server = new Collection($server);
+			$this->files = new Collection($files);
+			$this->headers = $this->server->filter(function($value, $key) { 
+				return (strpos($key, "HTTP_") === 0);
 			});
 
 			if (strstr($_SERVER['REQUEST_URI'], '?')) {
@@ -45,7 +46,7 @@
 			$this->type = Request::REQUEST_TYPE_DEFAULT;
 			$this->referrer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
 			
-			if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+			if ($this->server->has('HTTP_X_REQUESTED_WITH') &&
 				strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
 				$this->type = Request::REQUEST_TYPE_JSON;
 			}
@@ -55,17 +56,20 @@
 			}
 		}
 
-		// get and post
-		// 1. get THEN 2. post
 		public function get($keyword, $default = null) {
-			if (in_array($keyword, array_keys($this->get))) return $this->get[$keyword];
-			if (in_array($keyword, array_keys($this->post))) return $this->post[$keyword];
-			return $default;
+			return $this->get->get($keyword, $this->post->get($keyword, $default));
 		}
 
+		/**
+		 * [remove description]
+		 * @param  [type] $keyword [description]
+		 * @return [type]          [description]
+		 *
+		 * @todo  implement
+		 */
 		public function remove($keyword) {
-			if (in_array($keyword, array_keys($this->post))) unset($this->post[$keyword]);
-			elseif (in_array($keyword, array_keys($this->get))) unset($this->get[$keyword]);
+			//if (in_array($keyword, array_keys($this->post))) unset($this->post[$keyword]);
+			//elseif (in_array($keyword, array_keys($this->get))) unset($this->get[$keyword]);
 		}
 
 		public function route() {
@@ -79,7 +83,7 @@
 		}
 
 		public function has($keyword) {
-			return in_array($keyword, array_keys($this->get)) || in_array($keyword, array_keys($this->post));
+			return ($this->get->has($keyword) || $this->post->has($keyword)); 
 		}
 
 		public function isXmlHttpRequest() {

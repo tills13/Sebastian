@@ -27,14 +27,6 @@
 
 		protected $title;
 		protected $subtitle;
-		protected $showBannerBar;
-
-		// paging
-		protected $resultsPerPage;
-		protected $totalResults;
-		protected $page;
-		protected $pagerUrl;
-		protected $pagerAttributes;
 
 		protected $tabs;
 
@@ -101,10 +93,10 @@
 
 		public function getFullPath($path, $component = null) {
 			$components = $this->getContext()->getComponents(true);
-			$namespace = $this->getContext()->getAppNamespace();
+			$namespace = $this->getContext()->getNamespace();
 
 			foreach ($components as $component) {
-				$mPath = \APP_ROOT . "/{$namespace}/{$component['path']}/Resources/views/";
+				$mPath = \APP_ROOT . "/{$namespace}/{$component->getPath()}/Resources/views/";
 				$mPath = str_replace('//', '/', $mPath); // just in case
 
 				if (Utils::endsWith($path, ".php")) $mPath = $mPath . $path;
@@ -165,6 +157,14 @@
 			];
 		}
 
+		public function setTitle($title) {
+			$this->title = $title;
+		}
+
+		public function getTitle() {
+			return $this->title;
+		}
+
 		public function getContext() {
 			return $this->context;
 		}
@@ -195,7 +195,7 @@
 
 		public function getForm($name) {
 			$components = $this->getContext()->getComponents();
-			$namespace = $this->getContext()->getAppNamespace();
+			$namespace = $this->getContext()->getNamespace();
 
 			foreach ($components as $component) {
 				$mPath = \APP_ROOT . "/{$namespace}/{$component['path']}/Resources/form/";

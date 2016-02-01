@@ -5,6 +5,7 @@
 	use Sebastian\Core\Utility\Utils;
 
 	use Sebastian\Core\Cache\CacheManager;
+	use Sebastian\Core\Configuration\Configuration;
 
 	/**
 	 * Repository
@@ -18,29 +19,28 @@
 		protected static $tag = "Repository";
 		protected static $logger;
 
+		protected $config;
+
 		protected $class;
 		protected $definition;
 		protected $context;
+		protected $connection;
 
-		protected $_em;
+		protected $em;
+		protected $cm;
 		protected static $_objectReferenceCache;
 		
-		public function __construct($app, $em, $class = null) {
-			$this->context = $app;
-			$this->_em = $em;
+		public function __construct($context, $em, $class = null) {
+			$this->context = $context;
 			$this->class = $class;
+
 			$this->initCalled = false;
 
-			if (Repository::$_objectReferenceCache == null) {
-				Repository::$_objectReferenceCache = new CacheManager(
-					$this->context,
-					CacheManager::ARRAY_DRIVER
-				);	
-			}
-
 			// convenience
-			$this->cacheManager = $app->getCacheManager();
-			$this->conn = $em->getConnection();
+			$this->em = $em;
+			$this->cm = $context->getCacheManager();
+			$this->connection = $em->getConnection();
+
 			$this->init();
 		}
 
@@ -55,35 +55,36 @@
 		public function init() {
 			$this->initCalled = true;
 
-			if ($this->class != null) { // no object, just a DAO
-				$this->definition = $this->_em->getDefinition($this->class);
+			if ($this->class != null) {
+				$this->definition = $this->em->getDefinition($this->class);
+				$this->nsPath = $this->em->getNamespacePath($this->class);
 			}
 
-			if (!Repository::$logger) {
-				Repository::$logger = new Logger($this->context->getLogFolder(), null, ['filename' => 'orm']);
-				Repository::$logger->setTag(($this->class ?: 'DAO') . Repository::$tag);
+			if (Repository::$_objectReferenceCache == null) {
+				Repository::$_objectReferenceCache = new CacheManager(
+					$this->context,
+					new Configuration(['driver' => CacheManager::ARRAY_DRIVER])
+				);
 			}
 		}
 
 		/**
 		 * loads an object from the database based off a 
 		 * set of rule defined in an orm config file
-		 * @param  array $initialParams initial paramters to seed the object with
+		 * @param  array $params initial paramters to seed the object with
 		 * @return Entity a completed, possibly lazily loaded Entity
 		 */
-		public function get($initialParams) {
-			if (!$this->initCalled) throw new \Exception('(Repository|parent)::init() must be called', 1);
-			self::$logger->info("get: {$this->class}\n\t\tusing " . implode(',', array_keys($initialParams)));
-			
-			$keys = $this->definition['keys'];
-			$fields = $this->definition['fields'];
+		public function get($params) {
+			$table = $this->definition->get('table');
+			$keys = $this->definition->get('keys');
+			$fields = $this->definition->get('fields');
 
-			if (empty(array_intersect($keys, array_keys($initialParams)))) {
+			if (empty(array_intersect($keys, array_keys($params)))) {
 				$keys = implode(', ', $keys);
 				throw new \Exception("One of {$keys} must be provided in {$this->class}", 500);
 			}
 
-			$skeleton = $this->initializeObject($initialParams);
+			$skeleton = $this->initializeObject($params);
 
 			$orcKey = self::$_objectReferenceCache->generateKey($skeleton);
 			if (self::$_objectReferenceCache->isCached($orcKey)) {
@@ -92,73 +93,18 @@
 				self::$_objectReferenceCache->cache(null, $skeleton);	
 			}
 
-			$qb = $this->_em->getQueryBuilder();
-			/*$tables = $this->computeJoinColumns();
-
-			$qb = $qb->select(implode(',', $tables[$this->getTable()]));
-
-			foreach ($tables as $table) {
-				$qb->join()
-			}
-
-			/*foreach ($fields as $field) {
-				print_r($field);
-			}*/
-
-			//die();
-
-
-
-			//$cols = array_filter($fields, function)
-
-
-
-
-
-			//$qb = $qb->select()
-
-
-
-
-
-
-
-
-
-
-
-			/*if ($this->cacheManager->isCached($skeleton)) {
-				$object = $this->cacheManager->load($skeleton);
-				$object->reset();
-				return $object;
-			}*/
-
+			$qb = $this->em->getQueryBuilder();
+			
 			// columns in the object's table
 			$commonAttributes = array_filter($fields, function($field) {
 				return !isset($field['table']);
 			});
 
-			// columns not in the object's table
-			$otherAttributes = array_filter($fields, function($field) {
-				return ((isset($field['table']) && $field['table'] != $this->getTable()) || 
-						 isset($field['entity']));
-			});
-
-			$self = $this;
-			$keys = array_filter($keys, function($key) use ($skeleton, $self) {
-				$getterMethod = $self->getGetterMethod($key);
-				return ($skeleton->{$getterMethod}() !== null);
-			});
-
-			$cols = array_filter($commonAttributes, function($field) { return isset($field['column']); });
-			$cols = array_map(function($field) {
-				return $field['column'];
-			}, $cols);
+			$cols = $this->em->getNonForeignColumns($this->class);
 
 			$qb = $qb->select(implode(',', $cols))
-					 ->from($this->getTable());
+					 ->from($table);
 
-			// todo use bind(...)
 			foreach ($keys as $key) {
 				$qb = $qb->where("{$key} = " . Utils::escapeSQL($skeleton->{$self->getGetterMethod($key)}()));
 				//$qb->bind($key, $skeleton->{$self->getGetterMethod($key)}()))
@@ -166,7 +112,7 @@
 
 			$query = $qb->getQuery();
 
-			$result = $this->conn->execute($query);
+			$result = $this->connection->execute($query);
 			$results = $result->fetchFirst();
 
 			if ($results) {
@@ -190,7 +136,7 @@
 				} else if ($attributes['relation'] === 'many') {
 					$table = $repo->definition['table'];
 					
-					$qb = $this->_em->getQueryBuilder();
+					$qb = $this->em->getQueryBuilder();
 					$qb->select('*')
 					   ->from($table)
 					   ->where("{$attributes['with']} = " . Utils::escapeSQL($skeleton->getId()));
@@ -214,16 +160,16 @@
 			}
 
 			$skeleton->reset(); // clears entity's 'touched' parameter
-			//$this->cacheManager->cache($skeleton);
+			//$this->cm->cache($skeleton);
 
 			return $skeleton;
 		}
 
 		public function find($where = [], $options = []) {
 			if (!$this->initCalled) throw new \Exception('(Repository|parent)::init() must be called', 1);
-			self::$logger->info("find: {$this->class}\n\t\tusing " . implode(',', array_keys($where)));
+			//self::$logger->info("find: {$this->class}\n\t\tusing " . implode(',', array_keys($where)));
 
-			$qb = $this->_em->getQueryBuilder();
+			$qb = $this->em->getQueryBuilder();
 			$qb = $qb->select('*')
 					 ->from($this->getTable());
 
@@ -260,6 +206,11 @@
 			return $return;
 		}
 
+		public function computeJoinSets() {
+
+		}
+
+
 		protected function computeJoinColumns(&$joins = []) {
 			$fields = $this->definition['fields'];
 
@@ -274,11 +225,11 @@
 
 				if (in_array($entity, array_keys($joins))) continue;
 
-				print ($entity);
+				//print ($entity);
 
-				$repo = $this->_em->getRepository($entity);
+				$repo = $this->em->getRepository($entity);
 
-				$nonFks = $this->_em->getNonForeignColumns($entity);
+				$nonFks = $this->em->getNonForeignColumns($entity);
 				$joins[$entity] = $nonFks;
 
 				$repo->computeJoinColumns($joins);
@@ -290,7 +241,7 @@
 		// todo refactor
 		public function build($data, &$parent = null) {
 			if (!$this->initCalled) throw new \Exception('(Repository|parent)::init() must be called', 1);
-			self::$logger->info("build: {$this->class}\n\t\tusing " . implode(',', array_keys($data)) . "\n\t\tparent: " . ($parent ? 'yes' : 'no'));
+			//self::$logger->info("build: {$this->class}\n\t\tusing " . implode(',', array_keys($data)) . "\n\t\tparent: " . ($parent ? 'yes' : 'no'));
 
 			$keys = $this->definition['keys'];
 			$returnedKeys = array_intersect(array_keys($data), $keys);
@@ -344,7 +295,7 @@
 				} else {
 					// em->find woruld be great for this $repo->find(['parent' => x])
 					$table = isset($field['table']) ? $field['table'] : $repo->getTable();
-					$qb = $this->_em->getQueryBuilder();
+					$qb = $this->em->getQueryBuilder();
 					$qb = $qb->select('*')
 							 ->from($table)
 							 ->where("{$field['with']} = " . Utils::escapeSQL($skeleton->getId()));
@@ -373,7 +324,7 @@
 
 		public function persist($object, $parent) {
 			if (!$this->initCalled) throw new \Exception('(Repository|parent)::init() must be called', 1);
-			self::$logger->info("persist: {$this->class}");
+			//self::$logger->info("persist: {$this->class}");
 
 			if (!is_object($object)) {
 				throw new \Exception("must be an object", 1);
@@ -382,7 +333,7 @@
 			$keys = $this->definition['keys'];
 			$fields = $this->definition['fields'];
 
-			$qb = $this->_em->getQueryBuilder();
+			$qb = $this->em->getQueryBuilder();
 
 			$commonAttributes = array_filter($fields, function($field) {
 				return ((!isset($field['table']) || 
@@ -432,7 +383,7 @@
 					$qb = $qb->clean()
 						 ->insert($this->definition['table']);
 				} else {
-					$this->cacheManager->invalidate($object); // clear it right away
+					$this->cm->invalidate($object); // clear it right away
 					if (empty(array_intersect($keys, $this->definition['keys']))) {
 						$keys = implode(', ', $keys);
 						throw new \Exception("One of {$keys} must be provided", 500);
@@ -474,7 +425,7 @@
 					$withMethod = $repo->getGetterMethod($field['with']);
 
 					if ($entity['relation'] == 'one' || $entity['relation'] == 'parent') {
-						$this->_em->persist($mObject, $parent);
+						$this->em->persist($mObject, $parent);
 						$value = $mObject ? $mObject->{$withMethod}() : null;
 
 						if (!isset($field['column'])) continue;
@@ -509,23 +460,11 @@
 
 					if ($entity['relation'] == 'many' && is_array($mObject)) {
 						foreach ($mObject as $nObject) {
-							$this->_em->persist($nObject, $object);
+							$this->em->persist($nObject, $object);
 						}
 					}
 				}
 			}
-		}
-
-		public function forEntity($entity) {
-			return $this->_em->getRepository($entity);
-		}
-		
-		public function getConfig($path) {
-			return $this->_em->getConfig($this->class);
-		}
-
-		public function getTable() {
-			return $this->definition['table'];
 		}
 
 		public function getSetterMethod($key, $die = true) {
@@ -534,7 +473,7 @@
 				$methodName[0] = strtoupper($methodName[0]);
 				$methodName = $prefix . $methodName;
 
-				if (method_exists($this->_em->getNamespacePath($this->class), $methodName)) {
+				if (method_exists($this->em->getNamespacePath($this->class), $methodName)) {
 					return $methodName;
 				}
 			}
@@ -550,7 +489,7 @@
 				$methodName[0] = strtoupper($methodName[0]);
 				$methodName = $prefix . $methodName;
 
-				if (method_exists($this->_em->getNamespacePath($this->class), $methodName)) {
+				if (method_exists($this->em->getNamespacePath($this->class), $methodName)) {
 					return $methodName;
 				}
 			}
@@ -561,11 +500,11 @@
 		}
 
 		// MISC
-		private function initializeObject($initialParams = []) {
-			$object = $this->_em->getNamespacePath($this->class);
+		private function initializeObject($params = []) {
+			$object = $this->em->getNamespacePath($this->class);
 			$object = new $object();
 
-			foreach ($initialParams as $key => $value) {
+			foreach ($params as $key => $value) {
 				$setterMethod = $this->getSetterMethod($key, false);
 				if ($setterMethod) $object->{$setterMethod}($value);
 			}
@@ -574,6 +513,6 @@
 		}
 
 		public function getConnection() {
-			return $this->_em->getConnection();
+			return $this->em->getConnection();
 		}
 	}

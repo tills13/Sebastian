@@ -1,12 +1,12 @@
 <?php
     namespace Sebastian\Core\Database;
 
-    use Sebastian\Core\Repository\Repository;
+    use Sebastian\Core\Configuration\Configuration;
     use Sebastian\Core\Entity\Entity;
-
-    use Sebastian\Core\Utility\Logger;
+    use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Repository\Repository;
     use Sebastian\Core\Utility\Utils;
-
+    
     /**
      * EntityManager
      * 
@@ -14,24 +14,18 @@
      * @since  Oct. 2015
      */
     class EntityManager {
-        public static $logger;
         protected static $tag = "EntityManager";
 
         private $context;
         private $definitions; // orm definitions
         private $repositories;
 
-        public function __construct($app) {
-            $this->context = $app;
+        public function __construct($context, Configuration $config = null) {
+            $this->context = $context;
 
-            //$this->
-            $this->definitions = $app->loadConfig("orm.yaml");
-            $this->repositories = $app->getConfig("entity");
-
-            if (!EntityManager::$logger) {
-                EntityManager::$logger = new Logger($app->getLogFolder(), null, ['filename' => 'orm']);
-                EntityManager::$logger->setTag(EntityManager::$tag);
-            }
+            $this->repositories = $config;
+            $this->definitions = Configuration::fromFilename('orm.yaml');//$context->loadConfig("orm.yaml");
+            $this->logger = $context->getLogger(self::$tag);
         }
 
         // make it check to see if there is a 'persist' method defined in the the 
@@ -70,14 +64,6 @@
             return $this->persist([$object], $parent);
         }
 
-        public function setLazy($lazy) {
-            $this->options['lazy'] = $lazy;
-        }
-
-        public function getLazy() {
-            return $this->options['lazy'];
-        }
-
         public function getConnection() {
             return $this->context->getConnection();
         }
@@ -86,20 +72,16 @@
             return $this->getConnection()->getQueryBuilder($options);
         }
 
-        public function getDefinition($path = null) {
-            return isset($this->definitions[$path]) ? $this->definitions[$path] : [];
-        }
-
         public function getRepository($class) {
             if ($class instanceof Entity) $class = get_class($class);
-            if (!in_array($class, array_keys($this->repositories ?: []))) $class = $this->getBestGuessClass($class);
+            if (!$this->repositories->has($class)) $class = $this->getBestGuessClass($class);
 
-            if (in_array($class, array_keys($this->repositories ?: []))) {
-                $namespace = $this->context->getAppNamespace();
-                $entityInfo = $this->repositories[$class];
+            if ($this->repositories->has($class)) {
+                $namespace = $this->context->getNamespace();
+                $info = $this->repositories->sub($class);
 
-                if (isset($entityInfo['repository'])) {
-                    $repo = $entityInfo['repository'];
+                if ($info->has('repository')) {
+                    $repo = $info->get('repository');
                 
                     if (strstr($repo, ':')) {
                         $repo = explode(':', $repo);
@@ -110,8 +92,8 @@
                     } else {
                         $components = $this->context->getComponents(true);
                         foreach ($components as $component) {
-                            $path = $component['path'];
-                            $possibleFile = \APP_ROOT . "/{$namespace}{$path}/{$repo}Repository.php";
+                            $path = $component->getNamespacePath();
+                            $possibleFile = \APP_ROOT . "/{$namespace}/{$path}/{$repo}Repository.php";
 
                             if (file_exists($possibleFile)) {
                                 $path = str_replace('/', '', $path);
@@ -125,38 +107,45 @@
                     }
                     
                     return new $repoClass($this->context, $this, $class);
+                } else {
+                    return new Repository($this->context, $this, $class);
                 }
             }
 
-            return new Repository($this->context, $this, $this->getBestGuessClass($class));
+            throw new SebastianException("No repository found for '{$class}'");
         }
 
         public function getBestGuessClass($class) {
-            $namespace = $this->context->getAppNamespace();
+            $namespace = $this->context->getNamespace();
             $components = $this->context->getComponents();
             $bestGuessSimpleClass = strstr($class, '\\') ? substr($class, strrpos($class, '\\') + 1) : $class;
 
-            $entities = $this->context->getConfig('entity', []);
-            if (in_array($class, array_keys($entities))) {
+            //$entities = $this->config->get('entity', []);
+            if ($this->repositories->has($class)) {
                 return $class;
             }
 
-            foreach ($components as $components) {
-                $path = $components['path'];
-                $path = str_replace('/', '\\', $path);
+            foreach ($components as $component) {
+                $path = $component->getNamespacePath();
+                //$path = str_replace('/', '\\', $path);
 
-                $classPath = "{$namespace}{$path}\\Entity\\{$bestGuessSimpleClass}";
+                $classPath = "{$namespace}\\{$path}\\Entity\\{$bestGuessSimpleClass}";
+                var_dump($classPath);
 
-                if ($classPath == $class) return $bestGuessSimpleClass;
+                if ($classPath == $class) {
+                    return $bestGuessSimpleClass;
+                }
             }
-
-            //var_dump("MISSED: $class"); print "<br/>";
 
             return null;
         }
 
+        public function getDefinition($class) {
+            return $this->definitions->sub($class);
+        }
+
         public function getNamespacePath($class) {
-            if (in_array($class, array_keys($this->repositories))) {
+            if ($this->repositories->has($class)) {
                 // todo shrink
                 $entityInfo = $this->repositories[$class];
                 $entity = $entityInfo['entity'];
@@ -164,12 +153,12 @@
                 $entity = explode(':', $entity);
                 $component = $entity[0];
                 $path = str_replace('/', '\\', $entity[1]);
-                $namespace = $this->context->getAppNamespace();
+                $namespace = $this->context->getNamespace();
 
                 $repoClass = "\\{$namespace}\\{$component}\\{$path}";
 
                 return $repoClass;
-            } else return new Entity();
+            } else return null;
         }
 
         public function getForeignKeys($entityA, $entityB) {
@@ -179,12 +168,30 @@
         }
 
         public function getNonForeignColumns($entity) {
-            if (!in_array($entity, array_keys($this->definitions))) {
+            if (!$this->definitions->has($entity)) {
                 throw new \Exception("Unknown entity '{$entity}'");//SebastianException
             }
 
             $columnDefinitions = array_filter($this->definitions[$entity]['fields'], function($entity) {
                 return !isset($entity['relation']) && !isset($entity['with']);
+            }); 
+
+            return array_values(array_map(function($column) {
+                return $column['column'];
+            }, $columnDefinitions));
+        }
+
+        public function getOneToOneMappedColumns($entity) {
+            if (!in_array($entity, array_keys($this->definitions))) {
+                throw new SebastianException("Unknown entity '{$entity}'");//SebastianException
+            }
+
+            $columnDefinitions = array_filter($this->definitions[$entity]['fields'], function($entity) {
+                return isset($entity['relation']) && (
+                    strtolower($entity['relation']) == 'one' ||
+                    strtolower($entity['relation']) == 'onetoone' || 
+                    strtolower($entity['relation']) == '1:1'
+                );
             }); 
 
             return array_values(array_map(function($column) {

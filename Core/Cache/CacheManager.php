@@ -2,7 +2,7 @@
     namespace Sebastian\Core\Cache;
 
     use Sebastian\Core\Entity\Entity;
-    use Sebastian\Core\Utility\Logger;
+    use Sebastian\Core\Configuration\Configuration;
 
     /**
      * CacheManager
@@ -20,19 +20,18 @@
         protected $options;
         protected $driver;
 
-        public function __construct($context, $driver = CacheManager::DEFAULT_DRIVER, $options = []) {
+        public function __construct($context, Configuration $config) {
             $this->context = $context;
-            $this->options = array_merge([
+            $this->config = $config->extend([
+                'driver' => CacheManager::DEFAULT_DRIVER,
                 'enabled' => false,
                 'key_generation_strategy' => [
                     'object' => '{class}_{component}_{id}',
                     'other' => '{hash}'
                 ]
-            ], $options);
+            ]);
 
-            //$this->enabled = $app->getConfig('cache.enabled', false);
-            //$driverClass = $app->getConfig('cache.driver', CacheManager::DEFAULT_DRIVER);
-            $this->initializeDriver($driver);
+            $this->initializeDriver($this->config->get('driver'));
         }
 
         // todo needs to handle overrides properly (for custom drivers)
@@ -82,8 +81,8 @@
         }
 
         public function generateKey($thing) {
-            if (is_object($thing)) $base = $this->options['key_generation_strategy']['object'];
-            else $base = $this->options['key_generation_strategy']['other'];
+            if (is_object($thing)) $base = $this->config->get('key_generation_strategy.object');
+            else $base = $this->config->get('key_generation_strategy.other');
 
             $fields = ['component', 'class', 'id', 'hash'];
 
@@ -91,7 +90,7 @@
                 $context = $this->context;
                 $base = preg_replace_callback("/\{{$field}\}/", function($matches) use ($context, $field, $thing) {
                     if ($field == 'class') return get_class($thing);
-                    else if ($field == 'component') return $context->getApplicableComponent();
+                    else if ($field == 'component') return "Common";//$context->getApplicableComponent();
                     else if ($field == 'id') return $thing->getId(); // todo: no
                     else if ($field == 'hash') {
                         return is_object($thing) ? spl_object_hash($thing) : hash('sha256', $thing);

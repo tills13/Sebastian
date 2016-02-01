@@ -1,6 +1,7 @@
 <?php	
 	namespace Sebastian\Core\Database;
 
+	use Sebastian\Core\Configuration\Configuration;
 	use Sebastian\Core\Utility\Utils;
 
 	/**
@@ -11,20 +12,12 @@
 	 */
 	class Connection {
 		protected $driver;
-
-		protected $hostname;
-		protected $port;
-		protected $dbname;
-		protected $username;
-		protected $password;
-		protected $options;
-
 		protected $context;
+		protected $config;
 
-		public function __construct($context, $config = []) {
+		public function __construct($context, Configuration $config) {
 			$this->context = $context;
-
-			$config = array_merge([
+			$this->config = $config->extend([
 				'driver' => 'Sebastian\Core:PostgresDriver',
 				'hostname' => null,
 				'port' => null,
@@ -37,17 +30,9 @@
 					'caching' => false,
 					'connection_timeout' => 5
 				]
-			], $config);
+			]);
 
-			$this->hostname = $config['hostname'];
-			$this->port = $config['port'];
-			$this->dbname = $config['dbname'];
-			$this->username = $config['username'];
-			$this->password = $config['password'];
-
-			$this->options = $config['options'];
-
-			$this->initializeDriver($config['driver']);
+			$this->initializeDriver($config->get('driver'));
 			$this->cm = $context->getCacheManager();
 		}
 
@@ -65,10 +50,10 @@
             $classPath = "\\{$driverNamespace}\\Database\\Driver\\{$driverClassName}";
 
             $this->driver = new $classPath([
-            	'hostname' => $this->hostname,
-            	'port' => $this->port,
-            	'dbname' => $this->dbname
-            ], $this->username, $this->password);
+            	'hostname' => $this->config->get('hostname'),
+            	'port' => $this->config->get('port'),
+            	'dbname' => $this->config->get('dbname')
+            ], $this->config->get('username'), $this->config->get('password'));
 
             $this->driver->init();
 		}
@@ -118,14 +103,14 @@
 		}
 
 		public function isLazy() {
-			return $this->options['lazy'];
+			return $this->config->get('lazy');
 		}
 
 		// helpers
 		public function getQueryBuilder($options = []) {
-			$options = array_merge([
+			/*$options = array_merge([
 				'tagging' => $this->options['tagging']
-			], $options);
+			], $options);*/
 			
 			return new QueryBuilder($options);
 		}
