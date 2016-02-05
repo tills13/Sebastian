@@ -9,9 +9,9 @@
 	 * @author Tyler <tyler@sbstn.ca>
 	 * @since Oct. 2015
 	 */
-	class SecurityService extends BaseService {
-		public function __construct($app) {
-			parent::__construct($app);
+	class SecurityService extends Service {
+		public function __construct() {
+			parent::__construct();
 		}
 
 		public function generateToken() {

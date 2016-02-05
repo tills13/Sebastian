@@ -30,8 +30,10 @@
 		protected $columnAliases;
 
 		protected $froms;
-
 		protected $joins;
+		protected $where;
+		protected $limit;
+		protected $offset;
 
 		public function __construct() {
 			$this->type = self::TYPE_SELECT;
@@ -41,6 +43,9 @@
 			$this->froms = new Collection();
 
 			$this->joins = new Collection();
+			$this->where = null;
+			$this->limit = null;
+			$this->offset = 0; 
 		}
 
 		public function select(array $columns) {
@@ -57,15 +62,20 @@
 		}
 
 		public function join($join) {
-			$key = $join->getTable();
-			$key = preg_replace('/\./', '_', $key);
-			$this->joins->set($key, $join);
+			$this->joins->set(null, $join);
 		}
 
+		public function where($where) {
+			$this->where = $where;
+		}
 
+		public function limit($limit) {
+			$this->limit = $limit;
+		}
 
-
-
+		public function offset($offset) {
+			$this->offset = $offset;
+		}
 
 		public function getColumns() {
 			return $this->columns;
@@ -93,6 +103,11 @@
 					foreach ($this->joins as $m => $join) {
 						$query .= $join . "\n";
 					}
+
+					if ($this->where !== null) {
+						$query .= "WHERE " . $this->where . "\n";	
+					}
+					
 			}
 
 			return $query;

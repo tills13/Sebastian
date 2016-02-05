@@ -9,7 +9,7 @@
 	 * @author Tyler <tyler@sbstn.ca>
 	 * @since Oct. 2015
 	 */
-	class Service {
+	abstract class Service {
 		public function __construct() {}
-		public function boot() {}
+		abstract public function boot();
 	}

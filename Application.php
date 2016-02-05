@@ -89,6 +89,10 @@
             }
         }
 
+        public function shutdown(Request $request, Response $response) {
+            
+        }
+
         public function registerExceptionHandler(ExceptionHandlerInterface $handler) {
             $this->exceptionHandlers[] = $handler;
         }

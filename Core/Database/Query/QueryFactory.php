@@ -23,7 +23,7 @@
 		public function select() {
 			$this->query->setType(Query::TYPE_SELECT);
 
-			$columns = func_get_args();
+			$columns = array_pop(func_get_args());
 			foreach ($columns as $column) {
 				if (is_array($column)) {
 					$alias = array_pop(array_keys($column));
@@ -101,8 +101,15 @@
 			$this->join(Join::TYPE_RIGHT, $table, $on);
 		}
 
+		public function where($expression) {
+			$this->query->where($expression);
+
+			return $this;
+		}
+
 		public function reset() {
 			$this->query = new Query();
+			return $this;
 		}
 
 		public function getQuery() {

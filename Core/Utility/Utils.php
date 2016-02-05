@@ -170,10 +170,6 @@
 			return $return."<span style='margin-left: {$margin}px'>]</span>";
 		}
 
-		public static function buildItemsFromRequest($request, $type) {
-			
-		}
-
 		public static function getExtension($filename) {
 			return pathinfo($filename, PATHINFO_EXTENSION);
 		}

@@ -8,9 +8,12 @@
 		const SQL_SEPARATOR_AND = " AND ";
 		const SQL_SEPARATOR_OR = " OR ";
 		const SQL_SEPARATOR_EQUALS = " = ";
+		const SQL_SEPARATOR_NOT_EQUALS = " != ";
+		
 		const SEPARATOR_AND = Expression::SQL_SEPARATOR_AND;
 		const SEPARATOR_OR = Expression::SQL_SEPARATOR_OR;
 		const SEPARATOR_EQUALS = Expression::SQL_SEPARATOR_EQUALS;
+		const SEPARATOR_NOT_EQUALS = Expression::SQL_SEPARATOR_NOT_EQUALS;
 
 		protected $prefix = "(";
 		protected $postfix = ")";

@@ -48,6 +48,10 @@
             return $this->application->handle($this->request);
         }
 
+        public function shutdown(Request $request, Response $response) {
+            $this->application->shutdown($request, $response);
+        }
+
         public function getRequest() {
             return $this->request;
         }

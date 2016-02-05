@@ -23,7 +23,8 @@
 	 */
 	class Router {
 		public static $tag = "ROUTER";
-		
+		protected static $router;
+
 		protected $routes;
 		protected $context;
 
@@ -35,10 +36,12 @@
 		 * @return Router the router
 		 */
 		public static function getRouter(Application $context) {
-			$router = new Router($context);
-			$router->loadRoutes();
+			if (self::$router == null) {
+				self::$router = new Router($context);
+				self::$router->loadRoutes();
+			}				
 
-			return $router;
+			return self::$router;
 		}
 
 		protected function __construct($context) {

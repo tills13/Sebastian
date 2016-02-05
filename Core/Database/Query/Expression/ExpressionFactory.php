@@ -29,6 +29,13 @@
 			return $this;
 		}
 
+		public function notEquals($expression) {
+			$this->expression->setSeparator(Expression::SEPARATOR_NOT_EQUALS);
+			$this->expression->setRight($expression);
+
+			return $this;
+		}
+
 		public function andExpr($expression) {
 			$this->expression->setSeparator(Expression::SEPARATOR_AND);
 			$this->expression->setRight($expression);
@@ -40,6 +47,11 @@
 			$this->expression->setSeparator(Expression::SEPARATOR_OR);
 			$this->expression->setRight($expression);
 
+			return $this;
+		}
+
+		public function reset() {
+			$this->expression = new Expression();
 			return $this;
 		}
 
