@@ -2,7 +2,7 @@
     namespace Sebastian\Core\Cache;
 
     use Sebastian\Core\Entity\Entity;
-    use Sebastian\Core\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Configuration;
 
     /**
      * CacheManager

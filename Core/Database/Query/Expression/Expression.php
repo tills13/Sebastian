@@ -2,6 +2,14 @@
 	namespace Sebastian\Core\Database\Query\Expression;
 
 	class Expression {
+		const TYPE_NONE = 0; // commas
+		const TYPE_AND = 1;
+		const TYPE_OR = 2;
+		const TYPE_EQUALS = 3;
+		const TYPE_NOT_EQUALS = 4;
+		const TYPE_GT = 5;
+		const TYPE_LT = 6;
+
 		//const SEPARATOR_AND = " && ";
 		//const SEPARATOR_OR = " || ";
 		const SEPARATOR_COMMA = ", ";
@@ -14,26 +22,34 @@
 		const SEPARATOR_OR = Expression::SQL_SEPARATOR_OR;
 		const SEPARATOR_EQUALS = Expression::SQL_SEPARATOR_EQUALS;
 		const SEPARATOR_NOT_EQUALS = Expression::SQL_SEPARATOR_NOT_EQUALS;
+		const SEPARATOR_GT = ">";
+		const SEPARATOR_LT = "<";
 
 		protected $prefix = "(";
 		protected $postfix = ")";
 		protected $separator = Expression::SEPARATOR_COMMA;
 
-		protected $left;
-		protected $right;
+		protected $_typeMap = [
+			Expression::TYPE_NONE => Expression::SEPARATOR_COMMA,
+			Expression::TYPE_AND => Expression::SEPARATOR_AND,
+			Expression::TYPE_OR => Expression::SEPARATOR_OR,
+			Expression::TYPE_EQUALS => Expression::SEPARATOR_EQUALS,
+			Expression::TYPE_NOT_EQUALS => Expression::SEPARATOR_NOT_EQUALS
+		];
 
-		public function __construct($separator = null, $left = null, $right = null) {
-			$this->separator = $separator ?: Expression::SEPARATOR_COMMA;
-			$this->left = $left;
-			$this->right = $right;
+		protected $elements;
+
+		public function __construct($type = Expression::TYPE_NONE) {
+			$this->type = $type;
 		}
 
-		public function setLeft($left) {
-			$this->left = $left;
+		public function put($element) {
+			$this->elements[] = $element;
+			return $this;
 		}
 
-		public function getLeft() {
-			return $this->left;
+		public function putAll(array $elements) {
+			$this->elements = $this->elements + $elements;
 		}
 
 		public function setPrefix($prefix) {
@@ -52,28 +68,33 @@
 			return $this->postfix;
 		}
 
-		public function setRight($right) {
-			$this->right = $right;
-		}
-
-		public function getRight() {
-			return $this->right;
-		}
-
 		public function setSeparator($separator) {
 			$this->separator = $separator;
+			return $this;
 		}
 
-		public function getSeparator() {
-			return $this->separator;
+		public function getSeparator($override = null) {
+			return $override ?: $this->_typeMap[$this->getType()];
+		}
+
+		public function setType($type) {
+			$this->type = $type;
+			return $this;
+		}
+
+		public function getType() {
+			return $this->type;
+		}
+
+		public function is($type) {
+			return $this->getType() == $type;
 		}
 
 		public function __toString() {
-			if ($this->getRight() == null && $this->getLeft() == null) return "";
-			if ($this->getRight() == "" && $this->getLeft() == "") return "";
-
-			return $this->getPrefix() . $this->getLeft()
-				. (!($this->getLeft() == null || $this->getRight() == null) ? "{$this->getSeparator()}" : "")
-				. ($this->getRight() ?: "") . $this->getPostfix();
+			$expressionString = "";
+			if (count($this->elements) > 1) $expressionString .= $this->getPrefix();
+			$expressionString .= implode($this->getSeparator(), $this->elements);
+			if (count($this->elements) > 1) $expressionString .= $this->getPostfix();
+			return $expressionString;
 		}
 	}

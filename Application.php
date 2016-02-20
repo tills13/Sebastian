@@ -3,7 +3,7 @@
 
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
-    use Sebastian\Core\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Exception\SebastianException;
@@ -12,10 +12,9 @@
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Session\Session;
 
-    use Sebastian\Component\Collection\Collection;
-    use Sebastian\Component\Exception\Handler\ExceptionHandlerInterface;
-    use Sebastian\Component\Logging\Logger;
-
+    use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
+    use Sebastian\Utility\Logging\Logger;
+    use Sebastian\Utility\Collection\Collection;
 
     /**
      * Application
@@ -41,7 +40,6 @@
 
             $this->components = [];
             
-            //$this->logger = new Logger($this, $config->sub('application.logging'));
             $this->loggers = new Collection();
             $this->cacheManager = new CacheManager($this, $config->sub('cache'));
             $this->connection = new Connection($this, $config->sub('database'));
@@ -49,6 +47,7 @@
 
             $this->session = Session::fromGlobals($this);
             $this->registerComponents();
+            $this->checkComponentRequirements();
 
             if (count($this->components) == 0) {
                 throw new SebastianException("At least one component must be registered");
@@ -77,7 +76,7 @@
                 if ($response == null || !$response instanceof Response) {
                     throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
-            } catch (SebastianException $e) {
+            } catch (\Exception $e) {
                 foreach ($this->exceptionHandlers as $handler) {
                     if ($handler->onException($e)) { // handled
                         break;
@@ -90,7 +89,7 @@
         }
 
         public function shutdown(Request $request, Response $response) {
-            
+            $this->connection->close();
         }
 
         public function registerExceptionHandler(ExceptionHandlerInterface $handler) {
@@ -98,6 +97,13 @@
         }
 
         abstract function registerComponents();
+
+        public function checkComponentRequirements() {
+            foreach ($this->components as $component) {
+                if (!$component->hasRequirements()) continue;
+                if (!$component->checkRequirements($this)) $component->setEnabled(false);
+            }
+        }
 
         public function registerComponent(Component $component) {
             $this->components[strtolower($component->getName())] = $component;
@@ -137,6 +143,10 @@
 
         public function getComponents() {
             return $this->components;
+        }
+
+        public function getConfig() {
+            return $this->config;
         }
 
         public function getConnection() {

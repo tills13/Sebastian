@@ -1,14 +1,13 @@
 <?php
 	namespace Sebastian\Core\Repository;
 
-	use Sebastian\Component\Collection\Collection;
+	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Core\Cache\CacheManager;
-	use Sebastian\Core\Configuration\Configuration;
+	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Core\Database\Query\Expression\ExpressionFactory;
 	use Sebastian\Core\Database\Query\Part\Join;
 	use Sebastian\Core\Database\Query\QueryFactory;
 	use Sebastian\Core\Exception\SebastianException;
-	use Sebastian\Core\Utility\Utils;
 
 	/**
 	 * Repository
@@ -39,7 +38,7 @@
 
 			if ($config == null) $config = new Configuration();
 			$this->config = $config->extend([
-				'use_reflection' => false
+				'use_reflection' => true
 			]);
 
 			$this->em = $em;
@@ -48,13 +47,6 @@
 
 			$this->initCalled = false; // don't know why
 			$this->init();
-
-			// convenience
-			$this->cm = $context->getCacheManager();
-			$this->connection = $em->getConnection();
-
-			$this->reflection = new \ReflectionClass($this->class);
-			$this->columnMap = $this->generateColumnMap();
 		}
 
 		/**
@@ -81,6 +73,14 @@
 				$this->columns = $this->em->computeColumnSets($this->entity, $this->joins, $this->aliases);
 			}
 
+			$this->reflection = new \ReflectionClass($this->class);
+			$this->columnMap = $this->generateColumnMap();
+
+			// convenience
+			$this->cm = $this->context->getCacheManager();
+			$this->logger = $this->context->getLogger();
+			$this->connection = $this->em->getConnection();
+
 			if (Repository::$_objectReferenceCache == null) {
 				Repository::$_objectReferenceCache = new CacheManager(
 					$this->context,
@@ -89,13 +89,159 @@
 			}
 		}
 
+		public function build($object = null, $params = []) {
+			if (!$object) $object = $this->initializeObject();
+
+			$useReflection = $this->config->get('use_reflection', false);
+
+			foreach ($params as $key => $value) {
+				$fieldName = $this->columnMap->get($key);
+				if ($fieldName == null) continue;
+
+				if ($useReflection) {
+					$field = $this->reflection->getProperty($fieldName);
+					$inaccessible = $field->isPrivate() || $field->isProtected();
+					
+					if ($inaccessible) {
+						$field->setAccessible(true);
+						$field->setValue($object, $value);
+						$field->setAccessible(false); // reset
+					} else {
+						$field->setValue($object, $value);
+					}
+				} else {
+					$method = $this->getSetterMethod($fieldName, false);
+					if ($method) $object->{$method}($value);
+				}
+			}
+
+			return $object;
+		}
+
+		public function delete($object) {
+			$qf = QueryFactory::getFactory();
+			$ef = ExpressionFactory::getFactory();
+
+			$qf = $qf->delete()->from($this->getTable());
+
+			$mEf = ExpressionFactory::getFactory();
+			foreach ($this->keys as $key) {
+				$value = $this->getFieldValue($object, $key);
+
+				$ef->reset()->expr($key)->equals($value);
+				$mEf->andExpr($ef->getExpression());
+			}
+
+			$qf = $qf->where($mEf->getExpression());
+			$query = $qf->getQuery();
+
+			$result = $this->connection->execute($query, []);
+
+			if ($result->getError() == null) return true;
+			else {
+				throw new SebastianException("Could not delete {$this->getClass()}: {$result->getError()}");
+			}
+		}
+
+		public function find($where = []) {
+			$mSkeletons = [];
+			$qf = QueryFactory::getFactory();
+			$ef = ExpressionFactory::getFactory();
+
+			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
+
+			foreach ($this->joins as $key => $join) {
+				$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
+				$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
+
+				$expression = $ef->reset()->expr($withEntityKey)
+					->equals("{$foreignTableAlias}.{$join['foreign']}")->getExpression();
+
+				$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
+			}
+
+			$expression = null;
+			foreach ($where as $with => $param) {
+				if ($param instanceof Expression) {
+
+				} else {
+					$with = "{$this->aliases[$this->entity]}.{$with}";
+					$ef = $ef->reset()->expr($with);
+
+					// todo allow for tables like [['table' => 'column'] => param]
+					if (preg_match("/(!|not|>|<) ?(.+)/i", $param, $matches) >= 1) {
+						$operator = $matches[1];
+						$param = $matches[2];
+
+						if ($operator == '!' || $operator == 'not') $ef = $ef->notEquals($param);
+						else if ($operator == '<') $ef = $ef->lessThan($param);
+						else if ($operator == '>') $ef = $ef->greaterThan($param);
+					} else {
+						//$param = "{$this->aliases[$this->entity]}.{$param}";
+						$ef = $ef->equals($param);
+					}
+
+					if ($expression) {
+						$mExpression = $ef->getExpression();
+						$ef = $ef->reset()->with($mExpression)->andExpr($expression);
+					}
+
+					$expression = $ef->getExpression();
+				}
+			}
+
+			$qf = $qf->where($expression);
+			$result = $this->connection->execute($qf->getQuery(), []);
+			$results = $result->fetchAll() ?: [];
+
+			foreach ($results as $mResult) {
+				$skeleton = $this->build(null, $mResult);
+
+				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
+					$repo = $this->em->getRepository($mapped['entity']);
+					$this->logger->info("{$this->entity} repo {$mapped['entity']}");
+
+					$params = [];
+					foreach ($mResult as $key => $value) {
+						$nMatches = preg_match("/{$mapped['column']}_([a-zA-Z0-9_]+)/", $key, $matches);
+						if ($nMatches != 0) $params[$matches[1]] = $mResult[$matches[0]];
+					}
+					
+					$entity = $repo->get($params);
+					$skeleton = $this->build($skeleton, [$mapped['column'] => $entity]);
+				}
+
+				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
+					$repo = $this->em->getRepository($field['entity']);
+
+					$with = $mResult[$field['with']];
+					$entities = $repo->find([$field['mapped'] => $with]);
+					$skeleton = $this->build($skeleton, [$key => $entities]);
+				}
+
+				$mSkeletons[] = $skeleton;
+			}
+
+			return $mSkeletons;
+		}
+
 		/**
 		 * loads an object from the database based off a 
 		 * set of rule defined in an orm config file
-		 * @param  array $params initial paramters to seed the object with
+		 * @param array $params initial paramters to seed the object with
 		 * @return Entity a completed, possibly lazily loaded Entity
 		 */
 		public function get($params) {
+			if (!is_array($params)) {
+				if (count($this->keys) != 1) throw new SebastianException(
+					"Cannot use simplified method signature when entity has more than one key"
+				);
+
+				$params = [
+					$this->keys[0] => $params
+				];
+			}
+
 			$qf = QueryFactory::getFactory();
 			$ef = ExpressionFactory::getFactory();
 
@@ -108,9 +254,10 @@
 			$orcKey = self::$_objectReferenceCache->generateKey($skeleton);
 
 			if (self::$_objectReferenceCache->isCached($orcKey)) {
+				$this->logger->info("hit _orc with {$orcKey}");
 				return self::$_objectReferenceCache->load($orcKey);
 			} else {
-				self::$_objectReferenceCache->cache(null, $skeleton);	
+				self::$_objectReferenceCache->cache($orcKey, $skeleton);
 			}
 
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
@@ -119,26 +266,35 @@
 				$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
 				$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
 
-				$expression = $ef->reset()
-					->with($withEntityKey)
-					->equals("{$foreignTableAlias}.{$join['foreign']}")->getExpression();
+				$expression = $ef->reset()->expr($withEntityKey)
+					->equals("{$foreignTableAlias}.{$join['foreign']}")
+					->getExpression();
 
 				$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
 			}
 
+			$ef->reset();
+			$mExFactory = ExpressionFactory::getFactory();
 			foreach ($this->keys as $key) {
 				$withEntityKey = "{$this->aliases[$this->entity]}.{$key}";
+				$value = $this->getFieldValue($skeleton, $key);
 
-				$expression = $ef->reset()
-					->with($withEntityKey)
-					->equals($skeleton->{$this->getGetterMethod($key)}())
-					->getExpression();
-				$qf = $qf->where($expression);
+				if ($value == null) throw new SebastianException("Primary Key {$key} cannot be null/blank");
+
+				// generates the individual expression
+				$mExFactory->reset()->expr($withEntityKey)
+					->equals($value);
+
+				//$qf->bind($withEntityKey, $value);
+
+				// handles generating the final expression
+				$ef->andExpr($mExFactory->getExpression());
 			}
 
+			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
 
-			$result = $this->connection->execute($query);
+			$result = $this->connection->execute($query, []);
 			$results = $result->fetchFirst();
 
 			if ($results) {
@@ -165,110 +321,68 @@
 					$skeleton = $this->build($skeleton, [$key => $entities]);
 				}
 			} else return null;
-
-			$skeleton->reset(); // clears entity's 'touched' parameter
-			//$this->cm->cache($skeleton);
+			
+			$this->cm->cache(null, $skeleton);
 			return $skeleton;
 		}
 
-		public function find($where = []) {
-			$mSkeletons = [];
+		const PERSIST_MODE_INSERT = 0;
+		const PERSIST_MODE_UPDATE = 1;
+		const AUTO_GENERATED_TYPES = ['serial'];
+		public function persist($object) {
 			$qf = QueryFactory::getFactory();
-			$ef = ExpressionFactory::getFactory();
+			$mode = Repository::PERSIST_MODE_UPDATE;
 
-			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
-
-			foreach ($this->joins as $key => $join) {
-				$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
-				$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
-
-				$expression = $ef->reset()
-					->with($withEntityKey)
-					->equals("{$foreignTableAlias}.{$join['foreign']}")->getExpression();
-
-				$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
-			}
-
-			$expression = null;
-			foreach ($where as $with => $param) {
-				if ($param instanceof Expression) {
-
-				} else {
-					$with = "{$this->aliases[$this->entity]}.{$with}";
-					$ef = $ef->reset()->with($with);
-
-					// todo allow for tables like [['table' => 'column'] => param]
-					if (preg_match("/(?:!|not) ?(.+)/i", $param, $matches) >= 1) {
-						//$param = "{$this->aliases[$this->entity]}.{$matches[1]}";
-						$param = $matches[1];
-						$ef = $ef->notEquals($param);
-					} else {
-						//$param = "{$this->aliases[$this->entity]}.{$param}";
-						$ef = $ef->equals($param);
+			foreach ($this->keys as $key) {
+				$value = $this->getFieldValue($object, $key);
+				if ($value == null) {
+					$type = $this->getDefinition()->get("fields.{$key}.type");
+					if (!in_array($type, self::AUTO_GENERATED_TYPES)) {
+						throw new SebastianException("non auto-generated primary key columns cannot be null ({$type} - {$key})");
 					}
 
-					if ($expression) {
-						$mExpression = $ef->getExpression();
-						$ef = $ef->reset()->with($mExpression)->andExpr($expression);
-					}
-
-					$expression = $ef->getExpression();
+					$mode = Repository::PERSIST_MODE_INSERT;
 				}
 			}
 
-			$qf = $qf->where($expression);
-			$result = $this->connection->execute($qf->getQuery(), []);
-			$results = $result->fetch();
 
-			foreach ($results as $mResult) {
-				$skeleton = $this->build(null, $mResult);
+			if ($mode == Repository::PERSIST_MODE_INSERT) {
+				$columns = $this->em->getNonForeignColumns($this->entity);
 
-				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
-					$repo = $this->em->getRepository($mapped['entity']);
+				foreach ($columns as $column) {
+					$field = $this->columnMap->get($column);
+					$value = $this->getFieldValue($object, $field);
 
-					$params = [];
-					foreach ($mResult as $key => $value) {
-						$nMatches = preg_match("/{$mapped['column']}_([a-zA-Z0-9_]+)/", $key, $matches);
-						if ($nMatches != 0) $params[$matches[1]] = $mResult[$matches[0]];
+					if ($value != null && !in_array($field, $this->keys)) {
+						$qf->insert($column, $value);
 					}
-					
-					$entity = $repo->get($params);
-					$skeleton = $this->build($skeleton, [$mapped['column'] => $entity]);
 				}
 
-				$mSkeletons[] = $skeleton;
-			}
+				$foreign = $this->em->getOneToOneMappedColumns($this->entity);
 
-			return $mSkeletons;
-		}
+				// todo: do I have to persist these foreign objects?
+				foreach ($foreign as $name => $foreign) {
+					// lmfao
+					$column = $foreign['column'];
+					$field = $this->columnMap->get($column);
 
-		public function build($object = null, $params = []) {
-			if (!$object) $object = $this->initializeObject();
+					$fObject = $this->getFieldValue($object, $field);
+					$fRepo = $this->em->getRepository($foreign['entity']);
+					$fField = $fRepo->getColumnMap()->get($foreign['foreign']);
 
-			$useReflection = $this->config->get('use_reflection', false);
+					$value = $fRepo->getFieldValue($fObject, $fField);
 
-			foreach ($params as $key => $value) {
-				$fieldName = $this->columnMap->get($key);
-				if ($fieldName == null) continue;
-
-				if ($useReflection) {
-					$field = $field ?: $this->reflection->getProperty($fieldName);
-					$inaccessible = $field->isPrivate() || $field->isProtected();
-					
-					if ($inaccessible) {
-						$field->setAccessible(true);
-						$field->setValue($object, $value);
-						$field->setAccessible(false); // reset
-					} else {
-						$field->setValue($object, $value);
-					}
-				} else {
-					$method = $this->getSetterMethod($fieldName, false);
-					if ($method) $object->{$method}($value);
+					$qf->insert($column, $value);
 				}
-			}
 
-			return $object;
+				$qf->into($this->getTable());
+				$query = $qf->getQuery();
+				$this->getConnection()->execute($query, $query->getBinds());
+			} else {
+				$qf = $qf->update($this->getTable());
+			}
+			
+			return true;
 		}
 
 		public function generateColumnMap() {
@@ -283,20 +397,24 @@
 			return $columnMap;
 		}
 
-		public function getSetterMethod($key, $die = true) {
-			foreach (['set','add','put'] as $prefix) {
-				$methodName = $key;
-				$methodName[0] = strtoupper($methodName[0]);
-				$methodName = $prefix . $methodName;
-
-				if (method_exists($this->em->getNamespacePath($this->entity), $methodName)) {
-					return $methodName;
-				}
+		public function getFieldValue($object, $field) {
+			$useReflection = $this->config->get('use_reflection', false);
+			if ($useReflection) {
+				$fieldName = $this->columnMap->get($field);
+				$field = $this->reflection->getProperty($fieldName);
+				$inaccessible = $field->isPrivate() || $field->isProtected();
+					
+				if ($inaccessible) {
+					$field->setAccessible(true);
+					$value = $field->getValue($object);
+					$field->setAccessible(false); // reset
+				} else $value = $field->getValue($object);
+			} else {
+				$method = $this->getGetterMethod($field);
+				$value = $object->{$method}();
 			}
-			
-			if ($die) {
-				throw new \Exception("No 'set' method found for {$key} in {$this->entity}");
-			} else return null;
+
+			return $value;
 		}
 
 		public function getGetterMethod($key, $die = true) {
@@ -315,12 +433,34 @@
 			} else return null;
 		}
 
+		public function getSetterMethod($key, $die = true) {
+			foreach (['set','add','put'] as $prefix) {
+				$methodName = $key;
+				$methodName[0] = strtoupper($methodName[0]);
+				$methodName = $prefix . $methodName;
+
+				if (method_exists($this->em->getNamespacePath($this->entity), $methodName)) {
+					return $methodName;
+				}
+			}
+			
+			if ($die) {
+				throw new \Exception("No 'set' method found for {$key} in {$this->entity}");
+			} else return null;
+		}
+
+		
+
 		// MISC
 		private function initializeObject($params = []) {
 			$object = $this->em->getNamespacePath($this->entity);
 			$object = new $object();
 
 			return $this->build($object, $params);
+		}
+
+		public function getColumnMap() {
+			return $this->columnMap;
 		}
 
 		public function getConnection() {

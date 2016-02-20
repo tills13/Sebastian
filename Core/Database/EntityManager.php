@@ -1,11 +1,11 @@
 <?php
     namespace Sebastian\Core\Database;
 
-    use Sebastian\Core\Configuration\Configuration;
     use Sebastian\Core\Entity\Entity;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Repository\Repository;
-    use Sebastian\Core\Utility\Utils;
+    use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Utility\Configuration\Configuration;
     
     /**
      * EntityManager
@@ -24,16 +24,30 @@
             $this->context = $context;
 
             $this->repositories = $config;
+            //var_dump($config);
             $this->definitions = Configuration::fromFilename('orm.yaml');//$context->loadConfig("orm.yaml");
             $this->logger = $context->getLogger(self::$tag);
+
+            $this->repositoryStore = new Collection();
         }
 
-        // make it check to see if there is a 'persist' method defined in the the 
-        // repo class
-        // if so, use it, even if it's not an object
-        // actually I think that's current functionality
-        // should like... maybe not persist right away?
-        // like ysmfony, use 'flush'
+        public function delete($object) {
+            if (!is_array($object)) $object = [$object];
+
+            foreach ($object as $mObject) {
+                $class = $this->getBestGuessClass(get_class($mObject)); // hack
+                $repo = $this->getRepository($class);
+                
+                if ($repo != null) {
+                    if (!$repo->delete($mObject)) {
+                        throw new SebastianException("something went wrong deleting the object");
+                    }
+                } else {
+                    throw new SebastianException("something went wrong");
+                }
+            }
+        }
+        
         public function persist($object, $parent = null) {
             if (!is_array($object)) $object = [$object];
 
@@ -127,26 +141,71 @@
             return $mTables;
         }
 
+        /**
+         * ({Namespace}:)?{Component}:{Class}
+         * @param  [type] $class [description]
+         * @return [type]        [description]
+         */
+        public function normalizeClass($class) {
+            if (strstr($class, ':')) {
+                $class = explode(':', $class);
+
+                if (count($class) == 3) {
+                    $namespace = $class[0];
+                    $component = $class[1];
+                    $class = $class[2];
+                } else if (count($class) == 2) {
+                    $namespace = $this->context->getNamespace();
+                    $component = $class[0];
+                    $class = $class[1];
+                } else {
+                    throw new \Exception();
+                }
+            } else {
+                $namespace = $this->context->getNamespace();
+                //$component
+            }
+
+
+        }
+
+        /**
+         * turns \{Namespace}\{Class} into 
+         * @param  [type] $class [description]
+         * @return [type]        [description]
+         */
         public function getBestGuessClass($class) {
+
+
+
+
+            //var_dump($class);
             $namespace = $this->context->getNamespace();
             $components = $this->context->getComponents();
             $bestGuessSimpleClass = strstr($class, '\\') ? substr($class, strrpos($class, '\\') + 1) : $class;
 
-            //$entities = $this->config->get('entity', []);
+
+            //var_dump($bestGuessSimpleClass);
+            //var_dump($class);
+            //var_dump($this->repositories);
             if ($this->repositories->has($class)) {
+                //print ("here");
+                //return $this->repositories->
                 return $class;
             }
 
             foreach ($components as $component) {
                 $path = $component->getNamespacePath();
-                //$path = str_replace('/', '\\', $path);
 
                 $classPath = "{$namespace}\\{$path}\\Entity\\{$bestGuessSimpleClass}";
+                //print ($classPath);
 
                 if ($classPath == $class) {
                     return $bestGuessSimpleClass;
                 }
             }
+
+            //print ("null");
 
             return null;
         }
@@ -254,6 +313,8 @@
             if ($class instanceof Entity) $class = get_class($class);
             if (!$this->repositories->has($class)) $class = $this->getBestGuessClass($class);
 
+            //if ($this->repositoryStore->has($class)) return $this->repositoryStore->get($class);
+
             if ($this->repositories->has($class)) {
                 $namespace = $this->context->getNamespace();
                 $info = $this->repositories->sub($class);
@@ -284,7 +345,9 @@
                         }
                     }
                     
-                    return new $repoClass($this->context, $this, $class);
+                    $repo = new $repoClass($this->context, $this, $class);
+                    //$this->repositoryStore->set($class, $repo);
+                    return $repo;
                 } else {
                     return new Repository($this->context, $this, $class);
                 }
@@ -301,7 +364,8 @@
          * @todo resolve class if not found
          */
         public function getTable($class) {
-             if (!$this->definitions->has($class)) {
+            //var_dump($this->definitions);
+            if (!$this->definitions->has($class)) {
                 throw new SebastianException("Unknown class '{$class}'");//SebastianException
             }
 

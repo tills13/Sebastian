@@ -1,8 +1,8 @@
 <?php	
 	namespace Sebastian\Core\Database;
 
-	use Sebastian\Core\Configuration\Configuration;
-	use Sebastian\Core\Utility\Utils;
+	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Utility\Collection\Collection;
 
 	/**
 	 * Connection
@@ -14,6 +14,7 @@
 		protected $driver;
 		protected $context;
 		protected $config;
+		protected $preparedStatements;
 
 		public function __construct($context, Configuration $config) {
 			$this->context = $context;
@@ -34,6 +35,7 @@
 
 			$this->initializeDriver($config->get('driver'));
 			$this->cm = $context->getCacheManager();
+			$this->preparedStatements = new Collection();
 		}
 
 		// todo needs to handle overrides properly (for custom drivers)
@@ -58,30 +60,23 @@
             $this->driver->init();
 		}
 
-		public function prepare($name = null, $query, $params = []) {
+		public function close() {
+			if (!$this->driver) return;
+			$this->driver->close();
+		}
+
+		public function prepare($query, $name = null) {
 			$this->connect();
 
-			return $this->driver->prepare($name, $query, $params);
+			$name = $name ?: $this->generatePreparedStatementName();
+			$ps = $this->driver->prepare($name, $query);
+			$this->preparedStatements->set($ps->getName(), $ps);
+			return $ps;
 		}
 
 		// should use prepared statements... maybe someday
-		public function execute($query, $params = []) {
-			if ($this->getStatus() !== $this->driver->getStatusOk()) {
-				$this->connect();
-			}
-			
+		public function execute($query, $params = []) {			
 			$this->driver->preExecute($query, $params);
-
-			/*$key = $this->cm->generateKey($query);
-			var_dump($key);
-			if ($this->cm->isCached($key)) {
-				$result = $this->cm->load($key);
-				var_dump($result);
-			} else {
-				$result = $this->driver->execute($query, $params);	
-				$this->cm->cache($key, $result);
-			}*/
-
 			$result = $this->driver->execute($query, $params);	
 			$this->driver->postExecute($query, $result);
 
@@ -99,19 +94,22 @@
 		}
 
 		private function connect() {
-			$this->driver->connect();
+			if ($this->getStatus() !== $this->driver->getStatusOk()) {
+				$this->driver->connect();
+			}
 		}
 
 		public function isLazy() {
 			return $this->config->get('lazy');
 		}
 
-		// helpers
-		public function getQueryBuilder($options = []) {
-			/*$options = array_merge([
-				'tagging' => $this->options['tagging']
-			], $options);*/
-			
-			return new QueryBuilder($options);
+		private function generatePreparedStatementName() {
+			$count = $this->preparedStatements->count();
+			do {
+				$name = "st_{$count}";
+				$count++;
+			} while($this->preparedStatements->has($name));
+
+			return $name;
 		}
 	}

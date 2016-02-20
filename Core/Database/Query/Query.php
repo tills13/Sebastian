@@ -1,7 +1,7 @@
 <?php
 	namespace Sebastian\Core\Database\Query;
 
-	use Sebastian\Component\Collection\Collection;
+	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Core\Database\Query\Part\Part;
 
 	class Query implements Part {
@@ -9,22 +9,6 @@
 		const TYPE_DELETE = 1;
 		const TYPE_UPDATE = 2;
 		const TYPE_INSERT = 3;
-
-		private $parts = [
-			'select'	=> [],
-			'update'	=> [],
-			'from'		=> [],
-			'into'		=> [],
-			'join' 		=> [],
-			'set'		=> [],
-			'where'		=> [],
-			'groupBy' 	=> [],
-			'orderBy'	=> [],
-			'offset'	=> null,
-			'limit'		=> null
-		];
-
-
 
 		protected $columns;
 		protected $columnAliases;
@@ -34,9 +18,12 @@
 		protected $where;
 		protected $limit;
 		protected $offset;
+		protected $into;
+
+		protected $binds;
 
 		public function __construct() {
-			$this->type = self::TYPE_SELECT;
+			$this->binds = new Collection();
 
 			$this->columns = new Collection();
 			$this->columnAliases = new Collection();
@@ -48,6 +35,19 @@
 			$this->offset = 0; 
 		}
 
+		public function addBind($key, $value) {
+			$this->binds->set($key, $value);
+		}
+
+		public function setBinds($binds) {
+			$binds = ($binds instanceof Collection) ? $binds : new Collection($binds);
+			$this->binds = $binds;
+		}
+
+		public function getBinds() {
+			return $this->binds;
+		}
+
 		public function select(array $columns) {
 			$this->columns->extend($columns);
 		}
@@ -57,24 +57,55 @@
 			$this->columnAliases->set($column, $alias);
 		}
 
-		public function from(Part $from) {
+		public function addFrom(Part $from) {
+			$this->setFrom($from);
+		}
+
+		public function setFrom(Part $from) {
 			$this->froms->set(null, $from);
+		}
+
+		public function getFroms() {
+			return $this->forms;
+		}
+
+		public function setInto($identifier) {
+			$this->into = $identifier;
+		}
+
+		public function getInto() {
+			return $this->into;
 		}
 
 		public function join($join) {
 			$this->joins->set(null, $join);
 		}
 
-		public function where($where) {
-			$this->where = $where;
-		}
-
-		public function limit($limit) {
+		public function setLimit(int $limit) {
 			$this->limit = $limit;
+			return $this;
 		}
 
-		public function offset($offset) {
+		public function getLimit() {
+			return $this->limit;
+		}
+
+		public function setOffset(int $offset) {
 			$this->offset = $offset;
+			return $this;
+		}
+
+		public function getOffset() {
+			return $this->offset;
+		}
+
+		public function setWhere($expression) {
+			$this->where = $expression;
+			return $this;
+		}
+
+		public function getWhere() {
+			return $this->where;
 		}
 
 		public function getColumns() {
@@ -85,29 +116,17 @@
 			return $this->columnAliases;
 		}
 
-		public function getType() {
-			return $this->type;
-		}
-
-		public function setType($type) {
-			$this->type = $type;
-		}
-
 		public function __toString() {
-			switch ($this->type) {
-				case self::TYPE_SELECT:
-					$query  = "SELECT \n";
-					$query .= $this->columnsToString() . "\n";
-					$query .= "FROM " . $this->fromsToString() . "\n";
+			$query  = "SELECT \n";
+			$query .= $this->columnsToString() . "\n";
+			$query .= "FROM " . $this->fromsToString() . "\n";
 
-					foreach ($this->joins as $m => $join) {
-						$query .= $join . "\n";
-					}
+			foreach ($this->joins as $m => $join) {
+				$query .= $join . "\n";
+			}
 
-					if ($this->where !== null) {
-						$query .= "WHERE " . $this->where . "\n";	
-					}
-					
+			if ($this->where !== null) {
+				$query .= "WHERE " . $this->where . "\n";	
 			}
 
 			return $query;

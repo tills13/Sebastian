@@ -1,35 +1,51 @@
 <?php
 	namespace Sebastian\Core\Database\Driver;
 
-	use Sebastian\Core\Utility\Utils;
-
 	use Sebastian\Core\Database\Result;
+	use Sebastian\Core\Database\Result\PostgresResult;
+	use Sebastian\Core\Database\Statement\PreparedStatement;
+	use Sebastian\Core\Database\Transformer\PostgresTransformer;
+	use Sebastian\Utility\Utility\Utils; // todo replace with database specific utils
 
-	class PostgresDriver extends DatabaseDriver {
+	class PostgresDriver extends AbstractDriver {
 		const CONNECITON_BAD = PGSQL_CONNECTION_BAD;
 		const CONNECTION_OK = PGSQL_CONNECTION_OK;
 
+		public function __construct($params, $username, $password) {
+			parent::__construct($params, $username, $password);
+			$this->setResultsClass(PostgresResult::class);
+			$this->setTransformer(new PostgresTransformer($this));
+		}
+
 		public function connect() {
-			if (!self::$connection || ($this->getStatus() != CONNECTION_OK)) {
+			if (!self::$connection || ($this->getStatus() != self::CONNECTION_OK)) {
 				$connectionString = $this->getConnectionString();
 				self::$connection = pg_connect($connectionString);
 			}
 		}
 
-		public function preExecute(&$query) {}	
+		public function preExecute(&$query) {}
 
-		public function prepare($name = null, $query, $params) {
-			return pg_prepare(self::$connection, $name, $query);
+		public function prepare($name, $query) {
+			return new PreparedStatement($this, $name, pg_prepare(self::$connection, $name, $query));
 		}
 
 		public function execute($query, $params = []) {
+			$this->connect();
 			foreach ($params as $key => $parameter) {
 				$parameter = Utils::escapeSQL($parameter);
 				$query = preg_replace("(:{$key})", $parameter, $query);
 			}
 
 			$result = pg_query(self::$connection, $query);
-			return new Result($this, $result);
+			$resultClass = $this->getResultsClass();
+			return new $resultClass($this, $result);
+		}
+
+		public function executePrepared($name, $params = []) {
+			$result = pg_execute(self::$connection, $name, $params);
+			$resultClass = $this->getResultsClass();
+			return new $resultClass($this, $result);
 		}
 
 		public function getStatus() {
@@ -44,6 +60,11 @@
 
 		public function getStatusBad() {
 			return PGSQL_CONNECTION_BAD;
+		}
+
+		public function close() {
+			if (self::$connection == null) return;
+			return pg_close(self::$connection);
 		}
 
 		public function getConnectionString() {

@@ -1,7 +1,7 @@
 <?php
 	namespace Sebastian\Core\Http\Response;
 
-	use Sebastian\Component\Collection\Collection;
+	use Sebastian\Utility\Collection\Collection;
 
 	/**
 	 * Response

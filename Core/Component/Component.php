@@ -1,15 +1,17 @@
 <?php
 	namespace Sebastian\Core\Component;
 
-	use Sebastian\Component\Collection\Collection;
-	use Sebastian\Core\Configuration\Configuration;
+	use Sebastian\Application;
+	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Utility\Configuration\Configuration;
 
-	class Component {
+	abstract class Component {
 		protected $name;
 		protected $config;
 		protected $requirements;
 		protected $weight;
 		protected $path;
+		protected $enabled;
 
 		public function __construct($name, Configuration $config = null) {
 			$this->name = $name;
@@ -18,6 +20,15 @@
 			$this->requirements = new Collection();
 			$this->weight = 0;
 			$this->path = "";
+			$this->enabled = true;
+		}
+
+		public function setEnabled($enabled) {
+			$this->enabled = $enabled;
+		}
+
+		public function getEnabled() {
+			return $this->enabled;
 		}
 
 		public function setName($name) {
@@ -50,6 +61,10 @@
 			return $this->requirements;
 		}
 
+		public function hasRequirements() {
+			return ($this->requirements != null && $this->requirements->count() != 0);
+		}
+
 		public function setWeight($weight) {
 			$this->weight = $weight;
 		}
@@ -61,4 +76,6 @@
 		public function getNamespacePath() {
 			return str_replace('/', '\\', $this->path);
 		}
+
+		abstract public function checkRequirements(Application $context);
 	}

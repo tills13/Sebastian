@@ -1,10 +1,9 @@
 <?php
 	namespace Sebastian\Core\Controller;
 
-	use Sebastian\Core\Utility\Utils;
-
 	use Sebastian\Core\Http\Response\Response;
 	use Sebastian\Core\Http\Response\FileResponse;
+	use Sebastian\Utility\Utility\Utils;
 
 	class ResourceController extends Controller {
 		public function __construct($context) {

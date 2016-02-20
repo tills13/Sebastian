@@ -2,7 +2,6 @@
 	namespace Sebastian\Core\Session;
 
 	use Sebastian\Core\Entity\User;
-	use Sebastian\Core\Utility\Utils;
 	
 	/**
 	 * Session
@@ -80,28 +79,12 @@
 			return in_array($attr, $_SESSION);
 		} 
 
-		// todo
-		public function hasNotifications() {
-			return true;
-		}
-
 		public function is($attr, $default = false) {
 			return isset($_SESSION[$attr]) ? $_SESSION[$attr] === true : $default;
 		}
 
 		public function check() {
 			return ($_SESSION['session_user'] != null);
-		}
-
-		public function addNotice($type, $title = '', $message) {
-			$notices = $this->get('session_notices', []);
-			$notices[] = [
-				'type' => $type,
-				'title' => $title,
-				'message' => $message
-			];
-
-			$this->set('session_notices', $notices);
 		}
 
 		public function setCookie($field, $value, $expires = null) {

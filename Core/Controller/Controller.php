@@ -1,14 +1,13 @@
 <?php
 	namespace Sebastian\Core\Controller;
 
+	use Sebastian\Core\Exception\SebastianException;
+	use Sebastian\Utility\Form\FormFactory;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Http\Response\Response;
 	use Sebastian\Core\Http\Response\JsonResponse;
-
-	use Sebastian\Core\Form\Form;
-
-	use Sebastian\Core\Utility\Utils;
-	use Sebastian\Core\Exception\SebastianException;
+	
+	use Sebastian\Utility\Utility\Utils;
 	
 	/**
 	 * Controller
@@ -193,22 +192,10 @@
 			return $this->getContext()->getConnection();
 		}
 
-		public function getForm($name) {
-			$components = $this->getContext()->getComponents();
-			$namespace = $this->getContext()->getNamespace();
-
-			foreach ($components as $component) {
-				$mPath = \APP_ROOT . "/{$namespace}/{$component['path']}/Resources/form/";
-				$mPath = str_replace('//', '/', $mPath); // just in case
-
-				if (Utils::endsWith($name, ".yaml")) $mPath = $mPath . $name;
-				else $mPath= $mPath . $name . ".yaml";
-
-				if (file_exists($mPath)) {
-					return Form::fromConfig(yaml_parse_file($mPath), $this->getContext());
-				}
-			}
-
-			return new Form($name, $this->getContext());
+		public function getFormFactory() {
+			return FormFactory::getFactory(
+				$this->getContext(),
+				$this->getContext()->getConfig()->sub('form.factory', [])
+			);
 		}
 	}

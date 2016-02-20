@@ -1,7 +1,7 @@
 <?php
 	namespace Sebastian\Core\Database\Query;
 
-	use Sebastian\Core\Configuration\Configuration;
+	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Core\Database\Query\Part\DirectionalJoin;
 	use Sebastian\Core\Database\Query\Part\From;
 	use Sebastian\Core\Database\Query\Part\InnerJoin;
@@ -17,11 +17,14 @@
 
 		protected function __construct(Configuration $config = null) {
 			$this->config = $config;
-			$this->query = new Query();
 		}
 
+		/*public function bind($key, $value) {
+			$this->query->bind($key, $value);
+		}*/
+
 		public function select() {
-			$this->query->setType(Query::TYPE_SELECT);
+			$this->query = new Query();
 
 			$columns = array_pop(func_get_args());
 			foreach ($columns as $column) {
@@ -46,6 +49,24 @@
 			return $this;
 		}
 
+		public function insert($column = null, $value) {
+			if ($this->query == null) $this->query = new InsertQuery();
+
+			$this->query->addInsert($column, $value);
+
+			return $this;
+		}
+
+		public function update($table) {
+			$this->query = new UpdateQuery();
+			return $this;
+		}
+
+		public function delete() {
+			$this->query = new DeleteQuery();
+			return $this;
+		}
+
 		public function from() {
 			$froms = func_get_args();
 
@@ -58,9 +79,14 @@
 					$alias = null;
 				}
 
-				$this->query->from(new From($name, $alias));
+				$this->query->addFrom(new From($name, $alias));
 			}
 
+			return $this;
+		}
+
+		public function into($identifier) {
+			$this->query->setInto($identifier);
 			return $this;
 		}
 
@@ -102,8 +128,8 @@
 		}
 
 		public function where($expression) {
-			$this->query->where($expression);
-
+			$this->query->setWhere($expression);
+		
 			return $this;
 		}
 

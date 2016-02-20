@@ -4,7 +4,7 @@
     define('SEBASTIAN_ROOT', __DIR__);
 
     use Sebastian\Core\Cache\CacheManager;
-    use Sebastian\Core\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Core\Controller\Controller;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
@@ -27,6 +27,7 @@
 
         public function __construct($env) {
             $this->env = $env;
+            $this->request = Request::fromGlobals();
 
             $this->boot();
         }
@@ -43,13 +44,12 @@
             }
         }
 
-        public function handleRequest(Request $request) {
-            $this->request = $request;
+        public function run($params = null) {
             return $this->application->handle($this->request);
         }
 
-        public function shutdown(Request $request, Response $response) {
-            $this->application->shutdown($request, $response);
+        public function shutdown(Response $response) {
+            $this->application->shutdown($this->request, $response);
         }
 
         public function getRequest() {

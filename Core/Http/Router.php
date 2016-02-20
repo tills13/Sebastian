@@ -4,14 +4,13 @@
 	use Sebastian\SEBASTIAN_ROOT;
 
 	use Sebastian\Application;
-	use Sebastian\Component\Collection\Collection;
-	use Sebastian\Core\Configuration\Configuration;
+	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Entity\Entity;
 	use Sebastian\Core\Exception\PageNotFoundException;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Session\Session;
-	use Sebastian\Core\Utility\Utils;
 	
 	/**
 	 * Router
@@ -71,36 +70,50 @@
 			}, $components);
 
 			foreach ($paths as $index => $path) {
-				if (!file_exists($path)) {
-					//Router::$logger->info("skipping non-existent file {$path}");
-					continue;
-				}
+				if (!file_exists($path)) continue;
 
 				$startTime = microtime(true);
 				$routes = Configuration::fromPath($path);
 
-				if (!$routes || $routes->count() == 0) {
-					//Router::$logger->info("skipping empty file {$path}");
-					continue;
-				}
+				if (!$routes || $routes->count() == 0) continue;
 
 				foreach ($routes as $name => $mRoute) {
-					// required fields
-					$route = $mRoute->get('route');
-					$controller = $mRoute->get('controller');
-					$method = $mRoute->get('method');
+					if ($mRoute->has('type') || $mRoute->get('type') == 'group') {
+						$this->addRouteGroup($name, $mRoute);
+					} else {
+						// required fields
+						$route = $mRoute->get('route');
+						$controller = $mRoute->get('controller');
+						$method = $mRoute->get('method');
 
-					// optional
-					$methods = $mRoute->get('methods', ['GET', 'POST']);
-					$requirements = $mRoute->get('requirements', []);
+						// optional
+						$methods = $mRoute->get('methods', ['GET', 'POST']);
+						$requirements = $mRoute->get('requirements', []);
 
-					$this->addRoute($name, $route, $controller, $method, $requirements, $methods);
+						$this->addRoute($name, $route, $controller, $method, $requirements, $methods);
+					}
 				}
 
 				$count = count($routes);
 				$time = microtime(true) - $startTime;
+			}
+		}
 
-				//Router::$logger->info("loaded {$count} routes from disk in {$time} µseconds");
+		public function addRouteGroup($groupName, $group) {
+			$baseRoute = $group->get('route');
+
+			foreach ($group->sub('routes') as $name => $mRoute) {
+				$mName = "{$groupName}:{$name}";
+				
+				$route = $baseRoute . $mRoute->get('route');
+				$controller = $mRoute->get('controller');
+				$method = $mRoute->get('method');
+
+				// optional
+				$methods = $mRoute->get('methods', ['GET', 'POST']);
+				$requirements = $mRoute->get('requirements', []);
+
+				$this->addRoute($mName, $route, $controller, $method, $requirements, $methods);
 			}
 		}
 		
@@ -116,10 +129,6 @@
 			$methods = ($methods !== null) ? array_map(function($value) { 
 				return strtoupper($value); 
 			}, $methods) : ['GET','POST'];
-
-			//preg_match_all('/\{([^:\/]*?)(?:\:[^\/]*?)?\}/', $route, $args);
-			//array_shift($args); // get rid of the full string
-			//$args = $args[0]; // weird embedded array shit
 
 			if (strstr($controller, ':')) {
 				$components = explode(':', $controller);	 
@@ -145,7 +154,6 @@
 		 */
 		public function generateRouteRegex($route, $requirements) {
 			$route = preg_replace('/\//', '\/', $route);
-			//$route = preg_replace('/\./', '\\.', $route);
 
 			$parsedRoute = preg_replace_callback('/\{([^:]*?)(?:\:(.*?))?\}/', function($matches) use ($requirements) {
 				$param = $matches[1];
@@ -158,8 +166,6 @@
 				if (in_array($type, ['text', 'string'])) return "(?P<{$param}>[^\/]+)";
 				else if (in_array($type, ['int', 'number', 'integer'])) return "(?P<{$param}>\d+)";
 			}, $route, -1, $count);
-
-			//print ($parsedRoute . "<br/>");
 
 			return $parsedRoute;
 		}
@@ -182,7 +188,14 @@
 					$namespace = $this->getContext()->getNamespace();
 
 					if ($route->has('component')) {
-						$controller = "\\{$namespace}\\{$route['component']}\\Controller\\".$route['controller'];
+						$component = $this->getContext()->getComponent($route->get('component'));
+						if (!$component) continue;
+
+						$path = str_replace('/', '\\', $component->getPath());
+						$controller = "\\{$namespace}{$path}\\Controller\\".$route['controller'];	
+						$path = \APP_ROOT . '/'.str_replace('\\', '/', $controller) . '.php';
+
+						if (!file_exists($path)) continue;
 					} else {
 						foreach ($components as $component) {
 							$path = str_replace('/', '\\', $component->getPath());
@@ -193,6 +206,11 @@
 						}
 					}
 
+					/*try {
+
+					} catch (ReflectionException $e) {
+
+					}*/
 					$method = $route->get('method') . 'Action';
 					$reflection = new \ReflectionMethod($controller, $method);
 
@@ -207,7 +225,6 @@
 				}
 			}
 
-			//Router::$logger->error("could not find route for: {$mRoute}");
 			throw new PageNotFoundException("That page doesn't exist...", 404);
 		}
 
