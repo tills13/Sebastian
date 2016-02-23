@@ -285,13 +285,6 @@
 				self::$_objectReferenceCache->cache($orcKey, $skeleton);
 			}
 
-			/*print ("PARAMS:");
-			print_r($params);
-			$columns = array_filter($this->columns, function($column) use ($params) {
-				print_r($column);
-			});
-			print ("--------");*/
-
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
 
 			foreach ($this->joins as $key => $join) {
@@ -304,7 +297,7 @@
 						->getExpression();
 
 					$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
-				} else {
+				} else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
 					foreach (['Local', 'Foreign'] as $type) {
 						$mJoin = $join['join'];
 						$mColumn = $mJoin["joinColumn{$type}"];
@@ -341,8 +334,6 @@
 
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
-
-			//print ($query);
 
 			$result = $this->connection->execute($query, []);
 			$results = $result->fetchAll();
@@ -389,7 +380,6 @@
 								$values[] = $repo->get($objectParams);
 							}
 						} else { // fk
-							//print ($key); die();
 							$with = $results[0][$field['with']];
 							$values = $repo->find([$field['mapped'] => $with]);
 						}
@@ -399,6 +389,7 @@
 				}
 			} else return null;
 			
+			self::$_objectReferenceCache->cache($orcKey, $skeleton);
 			$this->cm->cache(null, $skeleton);
 			return $skeleton;
 		}
