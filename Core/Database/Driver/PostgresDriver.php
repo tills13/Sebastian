@@ -32,10 +32,6 @@
 
 		public function execute($query, $params = []) {
 			$this->connect();
-			foreach ($params as $key => $parameter) {
-				$parameter = Utils::escapeSQL($parameter);
-				$query = preg_replace("(:{$key})", $parameter, $query);
-			}
 
 			$result = pg_query(self::$connection, $query);
 			$resultClass = $this->getResultsClass();

@@ -111,7 +111,10 @@
                 		if (in_array($path, $keys)) $collection = $collection[$part];
                 		else return false;
                 	} else {
+                		//var_dump($part);
+                		//var_dump($collection);
                 		if (isset($collection[$part])) $collection = $collection[$part];
+                		//if (array_key_exists($part, $collection)) $collection = $collection[$part];
                     	else return false;
                 	}
                 }

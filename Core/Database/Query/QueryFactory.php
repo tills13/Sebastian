@@ -52,7 +52,8 @@
 		public function insert($column = null, $value) {
 			if ($this->query == null) $this->query = new InsertQuery();
 
-			$this->query->addInsert($column, $value);
+			$this->query->addInsert($column, ":{$column}");
+			$this->query->addBind($column, $value);
 
 			return $this;
 		}

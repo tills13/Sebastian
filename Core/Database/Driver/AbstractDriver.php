@@ -30,7 +30,7 @@
 		public function preExecute(&$query) {}
 
 		abstract function prepare($name, $query);
-		abstract public function execute($query, $params);
+		abstract public function execute($query, $params = []);
 
 		public function postExecute($query, &$result) {}
 

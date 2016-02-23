@@ -112,6 +112,7 @@
 
 		public function transformToPhpValue($value, $dbType = null) {
 			$phpTypes = $this->getPhpType($dbType);
+			//print_r ($phpTypes);
 
 			if (in_array('boolean', $phpTypes)) {
 				$value = $value === "t" ? true : false;
@@ -119,6 +120,8 @@
 				$value = intval($value, 10); // explicit base ten
 			} else if (in_array('double', $phpTypes)) {
 				$value = floatval($value);
+			} else if (in_array('timestamp', $phpTypes)) {
+				$value = new \DateTime($value);
 			}
 
 			return $value;

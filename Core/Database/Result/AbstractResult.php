@@ -41,8 +41,9 @@
 			return $this->result;
 		}
 
-		protected function completeResults($results) {
+		protected function completeResults($results = []) {
 			if ($results == null || count($results) == 0) return null;
+			if ($results[0] == false || !is_array($results[0])) return null;
 
 			$index = 0;
 			$typeMap = [];

@@ -1,13 +1,17 @@
 <?php
 	namespace Sebastian\Core\Repository;
 
-	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Application;
 	use Sebastian\Core\Cache\CacheManager;
-	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Database\Query\Expression\ExpressionFactory;
 	use Sebastian\Core\Database\Query\Part\Join;
 	use Sebastian\Core\Database\Query\QueryFactory;
 	use Sebastian\Core\Exception\SebastianException;
+	use Sebastian\Core\Repository\Transformer\ColumnTransformerInterface;
+	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Utility\Configuration\Configuration;
+
 
 	/**
 	 * Repository
@@ -28,12 +32,13 @@
 		protected $definition;
 		
 		protected $connection;
+		protected $transformer;
 
 		protected $em;
 		protected $cm;
 		protected static $_objectReferenceCache;
 		
-		public function __construct($context, $em, $entity = null, Configuration $config = null) {
+		public function __construct(Application $context, EntityManager $em, $entity = null, Configuration $config = null) {
 			$this->context = $context;
 
 			if ($config == null) $config = new Configuration();
@@ -66,7 +71,7 @@
 
 				$this->table = $this->definition->get('table');
 				$this->keys = $this->definition->get('keys');
-				$this->fields = $this->definition->get('fields');
+				$this->fields = $this->definition->sub('fields');
 
 				$this->joins = $this->em->computeJoinSets($this->entity);
 				$this->aliases = $this->em->generateTableAliases($this->entity, $this->joins);
@@ -80,6 +85,7 @@
 			$this->cm = $this->context->getCacheManager();
 			$this->logger = $this->context->getLogger();
 			$this->connection = $this->em->getConnection();
+			$this->transformer = null;
 
 			if (Repository::$_objectReferenceCache == null) {
 				Repository::$_objectReferenceCache = new CacheManager(
@@ -96,7 +102,21 @@
 
 			foreach ($params as $key => $value) {
 				$fieldName = $this->columnMap->get($key);
+				$field = $this->fields->sub($fieldName);
 				if ($fieldName == null) continue;
+
+				if ($this->transformer != null && $field->has('transformer')) {
+					$tMethod = $field->get('transformer', 'DEFAULT');
+
+					if ($tMethod == "DEFAULT") {
+						$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
+						$tMethod = "transform{$mFieldName}";
+					}
+
+					if (method_exists($this->transformer, $tMethod)) {
+						$value = $this->transformer->$tMethod($value);
+					} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
+				}
 
 				if ($useReflection) {
 					$field = $this->reflection->getProperty($fieldName);
@@ -168,6 +188,11 @@
 					$with = "{$this->aliases[$this->entity]}.{$with}";
 					$ef = $ef->reset()->expr($with);
 
+					if (is_array($param)) {
+						print ("IN");
+						//$ef->in($param);
+					}
+
 					// todo allow for tables like [['table' => 'column'] => param]
 					if (preg_match("/(!|not|>|<) ?(.+)/i", $param, $matches) >= 1) {
 						$operator = $matches[1];
@@ -231,15 +256,15 @@
 		 * @param array $params initial paramters to seed the object with
 		 * @return Entity a completed, possibly lazily loaded Entity
 		 */
+		const JOIN_TYPE_FK = 0;
+		const JOIN_TYPE_JOIN_TABLE = 1;
 		public function get($params) {
 			if (!is_array($params)) {
 				if (count($this->keys) != 1) throw new SebastianException(
-					"Cannot use simplified method signature when entity has more than one key"
+					"Cannot use simplified method signature when entity has more than one primary key"
 				);
 
-				$params = [
-					$this->keys[0] => $params
-				];
+				$params = [ $this->keys[0] => $params ];
 			}
 
 			$qf = QueryFactory::getFactory();
@@ -260,65 +285,117 @@
 				self::$_objectReferenceCache->cache($orcKey, $skeleton);
 			}
 
+			/*print ("PARAMS:");
+			print_r($params);
+			$columns = array_filter($this->columns, function($column) use ($params) {
+				print_r($column);
+			});
+			print ("--------");*/
+
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
 
 			foreach ($this->joins as $key => $join) {
-				$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
-				$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
+				if ($join['type'] == Repository::JOIN_TYPE_FK) {
+					$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
+					$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
 
-				$expression = $ef->reset()->expr($withEntityKey)
-					->equals("{$foreignTableAlias}.{$join['foreign']}")
-					->getExpression();
+					$expression = $ef->reset()->expr($withEntityKey)
+						->equals("{$foreignTableAlias}.{$join['foreign']}")
+						->getExpression();
 
-				$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
+					$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
+				} else {
+					foreach (['Local', 'Foreign'] as $type) {
+						$mJoin = $join['join'];
+						$mColumn = $mJoin["joinColumn{$type}"];
+						$mTable = $mJoin["joinTable{$type}"];
+						$tableAlias = $this->aliases["{$mColumn}_{$mTable}"];
+
+						$columns = explode(':', $mColumn);
+						if ($type == 'Local') $withEntityKey = "{$this->aliases[$this->entity]}.{$columns[0]}";
+						else {
+							$columnAlias = "{$mJoin['joinColumnLocal']}_{$mJoin['joinTableLocal']}";
+							$withEntityKey = "{$this->aliases[$columnAlias]}.{$columns[0]}";
+						}
+
+						$expression = $ef->reset()->expr($withEntityKey)
+							->equals("{$tableAlias}.{$columns[1]}")
+							->getExpression();
+
+						$qf = $qf->join(Join::TYPE_LEFT, [$tableAlias => $mTable], $expression);
+					}
+				}
 			}
 
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
 			foreach ($this->keys as $key) {
-				$withEntityKey = "{$this->aliases[$this->entity]}.{$key}";
 				$value = $this->getFieldValue($skeleton, $key);
-
 				if ($value == null) throw new SebastianException("Primary Key {$key} cannot be null/blank");
 
-				// generates the individual expression
-				$mExFactory->reset()->expr($withEntityKey)
-					->equals($value);
+				$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
+					->equals($value); // generates the individual expression
 
-				//$qf->bind($withEntityKey, $value);
-
-				// handles generating the final expression
-				$ef->andExpr($mExFactory->getExpression());
+				$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
 			}
 
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
 
+			//print ($query);
+
 			$result = $this->connection->execute($query, []);
-			$results = $result->fetchFirst();
+			$results = $result->fetchAll();
 
 			if ($results) {
-				$skeleton = $this->build($skeleton, $results);
+				$skeleton = $this->build($skeleton, $results[0]);
 
-				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
-					$repo = $this->em->getRepository($mapped['entity']);
+				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $key => $mapped) {
+					if (array_key_exists('entity', $mapped)) {
+						$repo = $this->em->getRepository($mapped['entity']);	
 
-					$params = [];
-					foreach ($results as $key => $value) {
-						$nMatches = preg_match("/{$mapped['column']}_([a-zA-Z0-9_]+)/", $key, $matches);
-						if ($nMatches != 0) $params[$matches[1]] = $results[$matches[0]];
+						$row = $results[0];
+						$objectParams = [];
+						foreach ($row as $key => $column) {
+							$nMatches = preg_match("/{$mapped['column']}_([a-zA-Z0-9_]+)/", $key, $matches);
+							if ($nMatches != 0) $objectParams[$matches[1]] = $row[$matches[0]];	
+						}
+
+						$value = $repo->get($objectParams);
+					} else {
+						if (array_key_exists('join', $mapped)) {
+							$column = explode(':', $mapped['join']['joinColumnForeign'])[1];
+							$value = $results["{$key}_{$column}"];
+						} else {
+							$value = $results["{$key}_{$mapped['table']}"];
+						}
 					}
 					
-					$entity = $repo->get($params);
-					$skeleton = $this->build($skeleton, [$mapped['column'] => $entity]);
+					$skeleton = $this->build($skeleton, [$mapped['column'] => $value]);
 				}
 				
 				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
-					$repo = $this->em->getRepository($field['entity']);
+					if (array_key_exists('entity', $field)) {
+						$repo = $this->em->getRepository($field['entity']);
 					
-					$with = $results[$field['with']];
-					$entities = $repo->find([$field['mapped'] => $with]);
-					$skeleton = $this->build($skeleton, [$key => $entities]);
+						if (array_key_exists('join', $field)) { // join table
+							foreach ($results as $row) {
+								$objectParams = [];
+								foreach ($row as $mKey => $column) {
+									$nMatches = preg_match("/{$key}_([a-zA-Z0-9_]+)/", $mKey, $matches);
+									if ($nMatches != 0) $objectParams[$matches[1]] = $row[$matches[0]];	
+								}
+
+								$values[] = $repo->get($objectParams);
+							}
+						} else { // fk
+							//print ($key); die();
+							$with = $results[0][$field['with']];
+							$values = $repo->find([$field['mapped'] => $with]);
+						}
+					}
+					
+					$skeleton = $this->build($skeleton, [$key => $values]);
 				}
 			} else return null;
 			
@@ -377,9 +454,12 @@
 
 				$qf->into($this->getTable());
 				$query = $qf->getQuery();
+				//print($query);
+				//var_dump($query->getBinds());
 				$this->getConnection()->execute($query, $query->getBinds());
 			} else {
-				$qf = $qf->update($this->getTable());
+				//$qf = $qf->update($this->getTable());
+				//print ($qf->getQuery());
 			}
 			
 			return true;
@@ -399,8 +479,10 @@
 
 		public function getFieldValue($object, $field) {
 			$useReflection = $this->config->get('use_reflection', false);
+			$fieldName = $this->columnMap->get($field);
+			$definition = $this->fields->sub($fieldName);
+
 			if ($useReflection) {
-				$fieldName = $this->columnMap->get($field);
 				$field = $this->reflection->getProperty($fieldName);
 				$inaccessible = $field->isPrivate() || $field->isProtected();
 					
@@ -412,6 +494,19 @@
 			} else {
 				$method = $this->getGetterMethod($field);
 				$value = $object->{$method}();
+			}
+
+			if ($this->transformer != null && $definition->has('transformer')) {
+				$tMethod = $definition->get('transformer', 'DEFAULT');
+
+				if ($tMethod == "DEFAULT") {
+					$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
+					$tMethod = "reverseTransform{$mFieldName}";
+				}
+
+				if (method_exists($this->transformer, $tMethod)) {
+					$value = $this->transformer->$tMethod($value);
+				} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
 			}
 
 			return $value;
@@ -449,8 +544,6 @@
 			} else return null;
 		}
 
-		
-
 		// MISC
 		private function initializeObject($params = []) {
 			$object = $this->em->getNamespacePath($this->entity);
@@ -473,5 +566,13 @@
 
 		public function getTable() {
 			return $this->table;
+		}
+
+		public function setTransformer(ColumnTransformerInterface $transformer) {
+			$this->transformer = $transformer;
+		}
+
+		public function getTransformer() {
+			return $this->transformer;
 		}
 	}

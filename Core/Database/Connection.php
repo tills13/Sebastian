@@ -74,8 +74,27 @@
 			return $ps;
 		}
 
-		// should use prepared statements... maybe someday
-		public function execute($query, $params = []) {			
+		public function execute($query, $params = []) {
+			//print ($query);
+			$index = 1;
+			$finalParams = [];
+			foreach ($params as $key => $parameter) {
+				//print ('$' . $index);
+				$query = preg_replace("(:{$key})", ('$' . $index), $query);
+				$finalParams[] = $parameter;
+				$index++;
+			}
+
+			//print ($query);
+
+
+
+			//die();
+
+
+			//$ps = $this->pre
+
+
 			$this->driver->preExecute($query, $params);
 			$result = $this->driver->execute($query, $params);	
 			$this->driver->postExecute($query, $result);

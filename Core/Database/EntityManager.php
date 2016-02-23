@@ -74,13 +74,34 @@
                 return "{$aliases[$class]}.{$column}";
             }, $this->getNonForeignColumns($class));
             
-            foreach ($joins as $join) {
-                $mColumns = array_map(function($column) use ($join, $aliases) {
-                    $key = "{$join['column']}_{$join['table']}";
+            foreach ($joins as $key => $join) {
+                if (array_key_exists('entity', $join)) {
+                    $mColumns = array_map(function($column) use ($join, $aliases) {
+                        if ($join['type'] == Repository::JOIN_TYPE_FK) {
+                            $key = "{$join['column']}_{$join['table']}";
+                        } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
+                            $mJoin = $join['join'];
+                            $key = "{$mJoin['joinColumnForeign']}_{$mJoin['joinTableForeign']}";
+                        }
+
+                        $columnName = "{$aliases[$key]}.{$column}";
+                        $columnAlias = "{$join['column']}_{$column}";
+                        return [$columnAlias => $columnName];
+                    }, $this->getNonForeignColumns($join['entity']));
+                } else {
+                    if ($join['type'] == Repository::JOIN_TYPE_FK) {
+                        //$mJoin = $join['join'];
+                    } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
+                        $mJoin = $join['join'];
+                        $column = explode(':', $mJoin['joinColumnForeign'])[1];
+                        $key = "{$mJoin['joinColumnForeign']}_{$mJoin['joinTableForeign']}";
+                    }
+
                     $columnName = "{$aliases[$key]}.{$column}";
                     $columnAlias = "{$join['column']}_{$column}";
-                    return [$columnAlias => $columnName];
-                }, $this->getNonForeignColumns($join['entity']));
+                    $mColumns = [ $column => [$columnAlias => $columnName] ];
+                }
+                
 
                 $columns = array_merge($columns, $mColumns);
             }
@@ -102,20 +123,70 @@
 
             $joins = [];    
             $table = $this->getDefinition($class)->get('table');
-            $fks = $this->getOneToOneMappedColumns($class);
+            $joinColumns = $this->getOneToOneMappedColumns($class);
+
+            foreach ($joinColumns as $join) { 
+                $mJoin = [ 'column' => $join['column'] ];
+
+                if (array_key_exists('join', $join)) {
+                    $mJoin['type'] = Repository::JOIN_TYPE_JOIN_TABLE;
+                    $mJoin['join'] = $join['join'];
+                } else {
+                    // todo
+                    if (array_key_exists('entity', $join)) {
+                        $table = $this->getTable($join['entity']);
+                        $fields = $this->getDefinition($join['entity'])->sub('fields');
+                        $field = $fields->sub($join['foreign']);
+                        $mJoin['entity'] = $join['entity'];
+                        $column = $field->get('column');
+                    } else {
+                        if (isset($join['table'])) $table = $join['table'];
+                        else {
+                            if (array_key_exists('join', $join)) { // 
+                                $mJoin = $join['join'];
+                            }
+                        }
+
+                        $column = $join['foreign'];
+                    }
+                   
+                    $mJoin['type'] = Repository::JOIN_TYPE_FK;
+                    $mJoin['table'] = $table;
+                    $mJoin['foreign'] = $column;//$field->get('column');
+                }
+
+                $joins[] = $mJoin;
+            }
+
+            $manyRelation = $this->getMultiMappedFields($class);
+
+            foreach ($manyRelation as $field => $many) {
+                //print_r($field); die();
+                $mJoin = [];
+
+                if (array_key_exists('entity', $many)) $mJoin['entity'] = $many['entity'];
+                else if (array_key_exists('table', $many)) $mJoin['table'] = $many['table'];
+                else {
+                    if (!array_key_exists('join', $many)) {
+                        throw new \Exception("Either entity or table must be specified.");
+                    }
+                }
+
+                if (array_key_exists('join', $many)) {
+                    $mJoin['type'] = Repository::JOIN_TYPE_JOIN_TABLE;
+                    $mJoin['join'] = $many['join'];
 
 
-            foreach ($fks as $foreignKey) {
-                $table = $this->getTable($foreignKey['entity']);
-                $fields = $this->getDefinition($foreignKey['entity'])->sub('fields');
-                $field = $fields->sub($foreignKey['foreign']);
+                    $mColumns = explode(':', $mJoin['join']['joinColumnLocal']);
+                    $mJoin['column'] = $field;
+                } else {
+                    $mJoin['type'] = Repository::JOIN_TYPE_FK;
+                    $mJoin['table'] = isset($mJoin['table']) ? $mJoin['table'] : $this->getTable($mJoin['entity']);
+                    $mJoin['column'] = $many['with'];
+                    $mJoin['foreign'] = $column;
+                }
 
-                $joins[] = [
-                    'entity' => $foreignKey['entity'],
-                    'column' => $foreignKey['column'],
-                    'table' => $table,
-                    'foreign' => $field->get('column')
-                ];
+                $joins[] = $mJoin;
             }
 
             return $joins;
@@ -123,19 +194,35 @@
 
         public function generateTableAliases($class, $joins = []) {
             $mTables = [];
-
             $mTables[$class] = substr($this->getTable($class), 0, 1);
 
             foreach ($joins as $join) {
-                $table = $join['table'];
-                $alias = substr($table, 0, 1);
+                if ($join['type'] == Repository::JOIN_TYPE_FK) {
+                    $table = $join['table'];
+                    $alias = substr($table, 0, 1);
+                    $column = $join['column'];
+                } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
+                    $mJoin = $join['join'];
+                    $table = $mJoin['joinTableLocal'];
+                    $alias = substr($table, 0, 1);
+                    $column = $mJoin['joinColumnLocal'];
+
+                    $index = 0;
+                    while (in_array($alias, $mTables)) $alias = $alias . $index;
+
+                    $mTables["{$column}_{$table}"] = $alias;
+
+                    $column = $mJoin['joinColumnForeign'];
+                    $table = $mJoin['joinTableForeign'];
+                    $alias = substr($table, 0, 1);
+                }
 
                 $index = 0;
                 while (in_array($alias, $mTables)) {
                     $alias = $alias . $index;
                 }
 
-                $mTables["{$join['column']}_{$table}"] = $alias;
+                $mTables["{$column}_{$table}"] = $alias;
             }
 
             return $mTables;
@@ -246,11 +333,28 @@
             }); 
 
             return array_map(function($field) {
-                return [
-                    'mapped' => $field['mapped'],
-                    'with' => $field['with'],
-                    'entity' => $field['entity']
-                ];
+                if (array_key_exists('entity', $field)) {
+                    $mField = [ 'entity' => $field['entity'] ];    
+                } else {
+                    if (!isset($field['table'])) {
+                        if (!isset($field['join']) && !isset($field['join']['joinTableLocal'])) {
+                            throw new \Exception("An entity must be specified or a table must be declared either under the object field spec. or under the join field for relations");    
+                        } else $mField = [ 'table' => $field['join']['joinColumnLocal'] ];
+                    } else {
+                        $mField = [ 'table' => $field['table'] ];
+                    }
+                }
+
+                if (array_key_exists('join', $field)) {
+                    $mField['type'] = Repository::JOIN_TYPE_JOIN_TABLE;
+                    $mField['join'] = $field['join'];
+                } else {
+                    $mField['type'] = Repository::JOIN_TYPE_FK;
+                    $mField['mapped'] = $field['mapped'];
+                    $mField['with'] = $field['with'];
+                }
+
+                return $mField;
             }, $fields);
         }
 
@@ -300,13 +404,35 @@
                 );
             }); 
 
-            return array_values(array_map(function($column) {
-                return [
-                    'column' => $column['column'],
-                    'foreign' => $column['with'],
-                    'entity' => $column['entity']
-                ];
-            }, $columnDefinitions));
+            return array_map(function($column) {
+                if (array_key_exists('entity', $column)) {
+                    $mColumn = [ 'entity' => $column['entity'] ];    
+                } else {
+                    if (!isset($column['table'])) {
+                        if (!isset($column['join']) && !isset($column['join']['joinTableLocal'])) {
+                            throw new \Exception("An entity must be specified or a table must be declared either under the object field spec. or under the join field for relations");    
+                        } else {
+                            $mColumn = [ 'table' => $column['join']['joinColumnLocal'] ];
+                        }
+                    } else {
+                        $mColumn = [ 'table' => $column['table'] ];
+                    }
+                }
+
+                // join table
+                if (array_key_exists('join', $column)) {
+                    $mColumn['join'] = $column['join'];
+
+                    $mColumns = $column['join']['joinColumnLocal'];
+                    $mColumns = explode(':', $mColumns);
+                    $mColumn['column'] = $mColumns[0];
+                } else {
+                    $mColumn['foreign'] = $column['with'];
+                    $mColumn['column'] = $column['column'];
+                }
+                
+                return $mColumn;
+            }, $columnDefinitions);
         }
 
         public function getRepository($class) {

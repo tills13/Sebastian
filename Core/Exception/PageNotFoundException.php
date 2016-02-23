@@ -9,6 +9,6 @@
 	 */
 	class PageNotFoundException extends SebastianException {
 		public function __construct() {
-			parent::__construct("That page does not exist...);
+			parent::__construct("That page does not exist...");
 		}
 	} 
