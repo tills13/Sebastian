@@ -1,13 +1,13 @@
 <?php
 	namespace Sebastian\Core\Database\Transformer;
 
-	use Sebastian\Core\Database\Driver\AbstractDriver;
+	use Sebastian\Core\Database\Connection;
 
-	abstract class AbstractTransformer {
-		protected $driver;
+	abstract class AbstractTransformer implements TransformerInterface {
+		protected $connection;
 
-		public function __construct(AbstractDriver $driver) {
-			$this->driver = $driver;
+		public function __construct(Connection $connection) {
+			$this->connection = $connection;
 		}
 
 		abstract public function getDatabaseType($phpType);

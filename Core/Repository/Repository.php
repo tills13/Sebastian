@@ -87,6 +87,12 @@
 			$this->transformer = null;
 		}
 
+		/**
+		 * [build description]
+		 * @param  [type] $object [description]
+		 * @param  array  $params [description]
+		 * @return [type]         [description]
+		 */
 		public function build($object = null, $params = []) {
 			if (!$object) $object = $this->initializeObject();
 
@@ -97,34 +103,7 @@
 				$field = $this->fields->sub($fieldName);
 				if ($fieldName == null) continue;
 
-				if ($this->transformer != null && $field->has('transformer')) {
-					$tMethod = $field->get('transformer', 'DEFAULT');
-
-					if ($tMethod == "DEFAULT") {
-						$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
-						$tMethod = "transform{$mFieldName}";
-					}
-
-					if (method_exists($this->transformer, $tMethod)) {
-						$value = $this->transformer->$tMethod($value);
-					} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
-				}
-
-				if ($useReflection) {
-					$field = $this->reflection->getProperty($fieldName);
-					$inaccessible = $field->isPrivate() || $field->isProtected();
-					
-					if ($inaccessible) {
-						$field->setAccessible(true);
-						$field->setValue($object, $value);
-						$field->setAccessible(false); // reset
-					} else {
-						$field->setValue($object, $value);
-					}
-				} else {
-					$method = $this->getSetterMethod($fieldName, false);
-					if ($method) $object->{$method}($value);
-				}
+				$object = $this->setFieldValue($object, $fieldName, $value);
 			}
 
 			return $object;
@@ -329,8 +308,8 @@
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
 
-			$result = $this->connection->execute($query, []);
-			$results = $result->fetchAll();
+			$statement = $this->connection->execute($query, []);
+			$results = $statement->fetchAll();
 
 			if ($results) {
 				$skeleton = $this->build($skeleton, $results[0]);
@@ -472,6 +451,42 @@
 			}
 
 			return $columnMap;
+		}
+
+		public function setFieldValue($object, $fieldName, $value) {
+			$useReflection = $this->config->get('use_reflection', false);
+			$definition = $this->fields->sub($fieldName);
+
+			if ($this->transformer != null && $definition->has('transformer')) {
+				$tMethod = $definition->get('transformer', 'DEFAULT');
+
+				if ($tMethod == "DEFAULT") {
+					$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
+					$tMethod = "transform{$mFieldName}";
+				}
+
+				if (method_exists($this->transformer, $tMethod)) {
+					$value = $this->transformer->$tMethod($value);
+				} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
+			}
+
+			if ($useReflection) {
+				$field = $this->reflection->getProperty($fieldName);
+				$inaccessible = $field->isPrivate() || $field->isProtected();
+				
+				if ($inaccessible) {
+					$field->setAccessible(true);
+					$field->setValue($object, $value);
+					$field->setAccessible(false); // reset
+				} else {
+					$field->setValue($object, $value);
+				}
+			} else {
+				$method = $this->getSetterMethod($fieldName, false);
+				if ($method) $object->{$method}($value);
+			}
+
+			return $object;
 		}
 
 		public function getFieldValue($object, $fieldName) {

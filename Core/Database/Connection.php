@@ -52,76 +52,36 @@
             $driverNamespace = $driverClass[0];
             $driverClassName = $driverClass[1];
 
-            $classPath = "\\{$driverNamespace}\\Database\\Driver\\{$driverClassName}";
+            $classPath = "\\{$driverNamespace}\\Database\\PDO\\{$driverClassName}";
+            $this->driver = new $classPath(
+            	$this, 
+            	$this->config->get('username'), 
+            	$this->config->get('password'), 
+            	$this->config
+            );
+		}
 
-            $this->driver = new $classPath($this, [
-            	'hostname' => $this->config->get('hostname'),
-            	'port' => $this->config->get('port'),
-            	'dbname' => $this->config->get('dbname')
-            ], $this->config->get('username'), $this->config->get('password'));
+		public function beginTransaction() {
+			return $this->driver->beginTransaction();
+		}
 
-            $this->driver->init();
+		public function commit() {
+			return $this->driver->commit();
 		}
 
 		public function close() {
 			if (!$this->driver) return;
-			$this->driver->close();
-		}
-
-		public function connect() {
-			if ($this->getStatus() !== $this->driver->getStatusOk()) {
-				$this->driver->connect();
-			}
+			$this->driver = null;
 		}
 
 		public function execute($query, $params = []) {
-			$this->connect();
-			$index = 1;
-			$finalParams = [];
-			foreach ($params as $key => $parameter) {
-				$query = preg_replace("(:{$key})", "\\\${$index}", $query);
-				$finalParams[] = $parameter;
-				$index++;
-			}
-
-			$this->driver->preExecute($query, $finalParams);
 			$ps = $this->prepare($query);
-			$result = $this->executePrepared($ps->getName(), $finalParams);
-			$this->driver->postExecute($query, $result);
-
-			return $result;
+			$ps->execute($params);
+			return $ps;
 		}
 
-		public function executePrepared($name, $params) {
-			$this->connect();
-			$result = $this->driver->executePrepared($name, $params);
-
-			if ($result == false || $result == null) {
-				throw new DatabaseException($this->driver->getLastError(), $this->driver->getErrorCode());
-			}
-
-			$resultClass = $this->driver->getResultsClass();
-			$mResult = new $resultClass($this, $result);
-
-			return $mResult;
-		}
-
-		public function executeUpdate($query, $params) {
-			$this->connect();
-
-		}
-
-		public function prepare($query, $name = null) {
-			$this->connect();
-			$name = $name ?: $this->generatePreparedStatementName();
-			$resource = $this->driver->prepare($name, $query);
-
-			if ($resource == false || $resource == null) {
-				throw new DatabaseException($this->driver->getLastError(), $this->driver->getErrorCode());
-			}
-
-			$ps = new PreparedStatement($this, $name, $resource);
-			$this->preparedStatements->set($ps->getName(), $ps);
+		public function prepare($query, array $options = []) {
+			$ps = $this->driver->prepare($query, $options);
 			return $ps;
 		}
 
@@ -129,32 +89,8 @@
 			return $this->config;
 		}
 
-		public function getConnection() {
-			$this->connect();
-
-			return $this->driver->getConnection();
-		}
-
 		public function getDriver() {
 			return $this->driver;
-		}
-
-		public function getStatus() {
-			return $this->driver->getStatus();
-		}
-
-		//** private
-
-		private function prepareQuery(&$query) {
-			$index = 1;
-			$finalParams = [];
-			foreach ($params as $key => $parameter) {
-				$query = preg_replace("(:{$key})", "\\\${$index}", $query);
-				$finalParams[] = $parameter;
-				$index++;
-			}
-
-			return $finalParams;
 		}
 
 		private function generatePreparedStatementName() {

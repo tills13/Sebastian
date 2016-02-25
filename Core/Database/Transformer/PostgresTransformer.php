@@ -98,10 +98,6 @@
 		    'xml' => 'xml'
 		];
 
-		public function __construct(PostgresDriver $driver) {
-			parent::__construct($driver);
-		}
-
 		public function getDatabaseType($phpType) {
 			return $this->phpTypesToPostgresTypes[$phpType];
 		}
