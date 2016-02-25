@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Cache;
 
-    use Sebastian\Core\Entity\Entity;
+    use Sebastian\Core\Entity\EntityInterface;
     use Sebastian\Utility\Configuration\Configuration;
 
     /**
@@ -13,24 +13,28 @@
         const DEFAULT_DRIVER = 'Sebastian\Core:NullDriver';
         const APCU_DRIVER = 'Sebastian\Core:NullDriver';
         const ARRAY_DRIVER = 'Sebastian\Core:Volatile\ArrayDriver';
+
         public static $tag = "CacheManager";
-        public static $logger;
 
         protected $context;
         protected $options;
         protected $driver;
+        protected $logger;
 
         public function __construct($context, Configuration $config) {
             $this->context = $context;
             $this->config = $config->extend([
                 'driver' => CacheManager::DEFAULT_DRIVER,
                 'enabled' => false,
+                'logging' => true,
                 'key_generation_strategy' => [
                     'object' => '{class}_{component}_{id}',
                     'other' => '{hash}'
                 ]
             ]);
 
+            $this->logger = $this->context->getLogger('cache');
+            $this->logger->setTag(self::$tag);
             $this->initializeDriver($this->config->get('driver'));
         }
 
@@ -51,24 +55,44 @@
         }
 
         public function clear($cache = "") {
-            //CacheManager::$logger->info("clearing\t>\t{$which}");
+            if ($this->config->get('logging', false)) {
+                $this->logger->info("clearing {$cache}");
+            }
+
             return $this->driver->clear($cache);
         }
 
         public function cache($key = null, $thing, $override = false, $ttl = null) {
             if ($key == null) $key = $this->generateKey($thing);
+
+            if ($this->config->get('logging', false)) {
+                $this->logger->info("caching {$key}");
+            }
+
             return $this->driver->cache($key, $thing, $override, $ttl);
         }
 
         public function invalidate($key) {
+            if ($this->config->get('logging', false)) {
+                $this->logger->info("invalidating {$key}");
+            }
+
             return $this->driver->invalidate($key);
         }
 
         public function isCached($key) {
+            if ($this->config->get('logging', false)) {
+                $this->logger->info("query {$key}");
+            }
+
             return $this->driver->isCached($key);
         }
 
         public function load($key) {
+            if ($this->config->get('logging', false)) {
+                $this->logger->info("loading {$key}");
+            }
+
             return $this->driver->load($key);
         }
 

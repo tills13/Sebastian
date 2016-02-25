@@ -1,7 +1,8 @@
 <?php
     namespace Sebastian\Core\Database;
 
-    use Sebastian\Core\Entity\Entity;
+    use Sebastian\Core\Cache\CacheManager;
+    use Sebastian\Core\Entity\EntityInterface;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Repository\Repository;
     use Sebastian\Utility\Collection\Collection;
@@ -20,6 +21,8 @@
         private $definitions; // orm definitions
         private $repositories;
 
+        protected static $_objectReferenceCache;
+
         public function __construct($context, Configuration $config = null) {
             $this->context = $context;
 
@@ -27,8 +30,20 @@
             //var_dump($config);
             $this->definitions = Configuration::fromFilename('orm.yaml');//$context->loadConfig("orm.yaml");
             $this->logger = $context->getLogger(self::$tag);
+            $this->logger->setTag(self::$tag);
 
             $this->repositoryStore = new Collection();
+
+            // volatile storage to keep objects until the FPM process dies i.e. per Request
+            if (EntityManager::$_objectReferenceCache == null) {
+                EntityManager::$_objectReferenceCache = new CacheManager(
+                    $this->context,
+                    new Configuration([
+                        'driver' => CacheManager::ARRAY_DRIVER,
+                        'logging' => true
+                    ])
+                );
+            }
         }
 
         public function delete($object) {
@@ -67,6 +82,58 @@
 
         public function persistOne($object, $parent) {
             return $this->persist([$object], $parent);
+        }
+
+        /**
+         * refreshed an object from the Database
+         * @param  Entity $object the entity to refresh
+         * @return Entity $object
+         */
+        public function refresh($object) {
+            $class = get_class($mObject);
+            $repo = $this->getRepository($class);
+            return $repo->refresh($object);
+        }
+
+        /**
+         * computes all the changed fields
+         * @param  Entity $object
+         * @return array []
+         */
+        public function computeObjectChanges($object) {
+            $objectKey = $this->getObjectCache()->generateKey($object);
+            $cached = $this->getObjectCache()->load($objectKey);
+
+            $class = $this->getBestGuessClass(get_class($object));
+            $definition = $this->getDefinition($class);
+            $repo = $this->getRepository($class);
+            
+            $changed = [];
+            foreach ($definition->sub('fields') as $name => $field) {
+                $objectVal = $repo->getFieldValue($object, $name);
+                $cachedVal = $repo->getFieldValue($cached, $name);
+
+                if ($field->has('entity')) {
+                    if (in_array($field->get('relation'), ['1:1', 'one', 'onetoone'])) {
+                        $mRepo = $this->getRepository(get_class($objectVal));
+                        $keysA = $mRepo->getPrimaryKeys($objectVal);
+                        $keysB = $mRepo->getPrimaryKeys($cachedVal);
+
+                        if ($keysA !== $keysB) $changed[] = $name;
+                        else {
+                            // todo figure this shit out
+                            // $mChanges = $this->computeObjectChanges($objectVal);
+                            // if (count($mChanges) != 0) $changed[] = $name;
+                        }
+                    } else if (in_array($field->get('relation'), ['1:x', 'many'])) {
+                    } else if ($field->has('join')) {
+                    } else { /* ???? */ }
+                } else {
+                    if ($objectVal != $cachedVal) $changed[] = $name;
+                }  
+            }
+
+            return $changed;
         }
 
         public function computeColumnSets($class, $joins, $aliases) {
@@ -435,6 +502,10 @@
             }, $columnDefinitions);
         }
 
+        public function getObjectCache() {
+            return self::$_objectReferenceCache;
+        }
+
         public function getRepository($class) {
             if ($class instanceof Entity) $class = get_class($class);
             if (!$this->repositories->has($class)) $class = $this->getBestGuessClass($class);
@@ -471,7 +542,8 @@
                         }
                     }
                     
-                    $repo = new $repoClass($this->context, $this, $class);
+                    $config = new Configuration($info->get('config', []));
+                    $repo = new $repoClass($this->context, $this, $class, $config);
                     //$this->repositoryStore->set($class, $repo);
                     return $repo;
                 } else {

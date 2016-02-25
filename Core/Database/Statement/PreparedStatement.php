@@ -1,20 +1,18 @@
 <?php
 	namespace Sebastian\Core\Database\Statement;
 
-	use Sebastian\Core\Database\Driver\AbstractDriver;
+	use Sebastian\Core\Database\Connection;
 	use Sebastian\Core\Database\Exception\DatabaseException;
 	use Sebastian\Utility\Collection\Collection;
 
 	class PreparedStatement extends Statement {
-		protected $driver;
 		protected $resource;
 		protected $name;
 		protected $parameterMap;
 
-		public function __construct(AbstractDriver $driver, $name, $resource) {
-			parent::__construct($driver);
+		public function __construct(Connection $connection, $name, $resource) {
+			parent::__construct($connection);
 
-			$this->driver = $driver;
 			$this->name = $name;
 			$this->resource = $resource;
 
@@ -24,16 +22,27 @@
 		}
 
 		public function __invoke() {
+			$connection = $this->getConnection();
+			$driver = $connection->getDriver();
+			$transformer = $driver->getTransformer();
+
 			$params = func_get_args();
 			foreach ($params as &$param) {
-				$param = $this->driver->getTransformer()->transformToDBValue($param);
+				$param = $transformer->transformToDBValue($param);
 			}
 
-			return $this->driver->executePrepared($this->name, $params);
+			return $connection->executePrepared($this->getName(), $params);
 		}
 
+		/**
+		 * @todo implement types
+		 * @param  array  $params [description]
+		 * @param  array  $types  [description]
+		 * @return [type]         [description]
+		 */
 		public function execute($params = [], $types = []) {
-			return $this->driver->executePrepared($this->name, $params);
+			$connection = $this->getConnection();
+			return $connection->executePrepared($this->getName(), $params);
 		}
 
 		public function getName() {

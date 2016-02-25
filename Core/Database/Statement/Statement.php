@@ -1,15 +1,15 @@
 <?php
 	namespace Sebastian\Core\Database\Statement;
 
-	use Sebastian\Core\Database\Driver\AbstractDriver;
+	use Sebastian\Core\Database\Connection;
 
 	class Statement {
-		protected $driver;
+		protected $connection;
 		protected $query;
 		protected $params;
 
-		public function __construct(AbstractDriver $driver) {
-			$this->driver = $driver;
+		public function __construct(Connection $connection) {
+			$this->connection = $connection;
 		}
 
 		public function getConnection() {

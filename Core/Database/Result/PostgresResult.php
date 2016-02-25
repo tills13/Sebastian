@@ -26,8 +26,12 @@
 		}
 
 		public function getError() {
-			return pg_last_error();
+			return pg_last_error($this->getDriver()->getConection());
 			//return pg_result_error($this->getResult());
+		}
+
+		public function getErrorCode() {
+			return 0;
 		}
 
 		public function getNumAffectedRows() {

@@ -189,7 +189,7 @@
             if ($this->loggers->has($name)) {
                 return $this->loggers->get($name);
             } else {
-                $this->loggers->set($name, new Logger($this, new Configuration([])));
+                $this->loggers->set($name, new Logger($this, new Configuration($options)));
                 return $this->getLogger($name);
             }
         }

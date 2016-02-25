@@ -6,7 +6,7 @@
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Form\Exception\FormException;
 	use Sebastian\Utility\Form\Field\Field;
-	use Sebastian\Core\Entity\Entity;
+	use Sebastian\Core\Entity\EntityInterface;
 
 	/**
 	 * Form

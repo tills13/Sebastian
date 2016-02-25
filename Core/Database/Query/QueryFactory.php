@@ -128,6 +128,16 @@
 			$this->join(Join::TYPE_RIGHT, $table, $on);
 		}
 
+		/**
+		 * sql RETURNING [column] AS [alias]
+		 * format [column => alias] or [[column => alias], ...]
+		 * @return $this
+		 */
+		public function returning($returning) {
+			$this->query->addReturning($returning);
+			return $this;
+		}
+
 		public function where($expression) {
 			$this->query->setWhere($expression);
 		

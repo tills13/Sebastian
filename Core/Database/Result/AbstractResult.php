@@ -7,8 +7,8 @@
 		protected $driver;
 		protected $result;
 
-		public function __construct(AbstractDriver $driver, $result) {
-			$this->driver = $driver;
+		public function __construct(Connection $connection, $result) {
+			$this->connection = $connection;
 			$this->result = $result;
 		}
 
@@ -17,6 +17,7 @@
 		abstract public function fetchColumn($column);
 		abstract public function fetchColumnInRow($row, $column);
 		abstract public function getError();
+		abstract public function getErrorCode();
 		abstract public function getNumAffectedRows();
 		abstract public function getNumColumns();
 		abstract public function getNumRows();

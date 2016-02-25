@@ -7,7 +7,7 @@
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Core\Database\EntityManager;
-	use Sebastian\Core\Entity\Entity;
+	use Sebastian\Core\Entity\EntityInterface;
 	use Sebastian\Core\Exception\PageNotFoundException;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Session\Session;

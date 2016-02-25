@@ -1,21 +1,22 @@
 <?php
 	namespace Sebastian\Core\Database\Driver;
 
+	use Sebastian\Core\Database\Connection;
+
 	abstract class AbstractDriver {
 		const CONNECITON_BAD = 0;
 		const CONNECTION_OK = 1;
 
-		protected static $connection;
-
+		protected $connectionResource; // todo should this be static?
+		protected $connection;
 		protected $params;
-		
 		protected $username;
 		protected $password;
-
 		protected $resultsClass;
 		protected $transformer;
 
-		public function __construct($params, $username, $password) {
+		public function __construct(Connection $connection, $params, $username, $password) {
+			$this->connection = $connection;
 			$this->params = $params;
 			$this->username = $username;
 			$this->password = $password;
@@ -23,23 +24,31 @@
 			$this->transformer = null;
 		}
 
-		public function init() {}
-
 		abstract public function connect();
-
-		public function preExecute(&$query) {}
-
-		abstract function prepare($name, $query);
+		abstract public function close();
 		abstract public function execute($query, $params = []);
+		abstract public function prepare($name, $query);
 
-		public function postExecute($query, &$result) {}
-
+		abstract public function getConnectionString();
 		abstract public function getStatus();
 		abstract public function getStatusOk();
 		abstract public function getStatusBad();
-		abstract public function close();
 
-		abstract public function getConnectionString();
+		public function init() {}
+		public function preExecute(&$query) {}
+		public function postExecute($query, &$result) {}
+
+		public function getConnection() {
+			return $this->connection;
+		}
+
+		public function setConnectionResource($resource) {
+			$this->connectionResource = $resource;
+		}
+
+		public function getConnectionResource() {
+			return $this->connectionResource;
+		}
 
 		public function setResultsClass($class) {
 			$this->resultsClass = $class;

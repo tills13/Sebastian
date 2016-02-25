@@ -2,7 +2,6 @@
 	namespace Sebastian\Core\Repository;
 
 	use Sebastian\Application;
-	use Sebastian\Core\Cache\CacheManager;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Database\Query\Expression\ExpressionFactory;
 	use Sebastian\Core\Database\Query\Part\Join;
@@ -11,7 +10,6 @@
 	use Sebastian\Core\Repository\Transformer\ColumnTransformerInterface;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
-
 
 	/**
 	 * Repository
@@ -36,19 +34,19 @@
 
 		protected $em;
 		protected $cm;
-		protected static $_objectReferenceCache;
+		protected $orc;
+		
 		
 		public function __construct(Application $context, EntityManager $em, $entity = null, Configuration $config = null) {
 			$this->context = $context;
 
 			if ($config == null) $config = new Configuration();
-			$this->config = $config->extend([
-				'use_reflection' => true
-			]);
+			$this->config = $config->extend([ 'use_reflection' => true ]);
 
 			$this->em = $em;
 			$this->entity = $entity;
 			$this->class = $this->em->getNamespacePath($this->entity);
+			$this->orc = $this->em->getObjectCache();
 
 			$this->initCalled = false; // don't know why
 			$this->init();
@@ -83,16 +81,10 @@
 
 			// convenience
 			$this->cm = $this->context->getCacheManager();
-			$this->logger = $this->context->getLogger();
+			$this->logger = $this->context->getLogger(self::$tag);
+			$this->logger->setTag(self::$tag);
 			$this->connection = $this->em->getConnection();
 			$this->transformer = null;
-
-			if (Repository::$_objectReferenceCache == null) {
-				Repository::$_objectReferenceCache = new CacheManager(
-					$this->context,
-					new Configuration(['driver' => CacheManager::ARRAY_DRIVER])
-				);
-			}
 		}
 
 		public function build($object = null, $params = []) {
@@ -146,7 +138,8 @@
 
 			$mEf = ExpressionFactory::getFactory();
 			foreach ($this->keys as $key) {
-				$value = $this->getFieldValue($object, $key);
+				$fieldName = $this->columnMap->get($key);
+				$value = $this->getFieldValue($object, $fieldName);
 
 				$ef->reset()->expr($key)->equals($value);
 				$mEf->andExpr($ef->getExpression());
@@ -276,13 +269,13 @@
 			}
 
 			$skeleton = $this->initializeObject($params);
-			$orcKey = self::$_objectReferenceCache->generateKey($skeleton);
+			$orcKey = $this->orc->generateKey($skeleton);
 
-			if (self::$_objectReferenceCache->isCached($orcKey)) {
+			if ($this->orc->isCached($orcKey)) {
 				$this->logger->info("hit _orc with {$orcKey}");
-				return self::$_objectReferenceCache->load($orcKey);
+				return $this->orc->load($orcKey);
 			} else {
-				self::$_objectReferenceCache->cache($orcKey, $skeleton);
+				$this->orc->cache($orcKey, $skeleton);
 			}
 
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
@@ -323,7 +316,8 @@
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
 			foreach ($this->keys as $key) {
-				$value = $this->getFieldValue($skeleton, $key);
+				$fieldName = $this->columnMap->get($key);
+				$value = $this->getFieldValue($skeleton, $fieldName);
 				if ($value == null) throw new SebastianException("Primary Key {$key} cannot be null/blank");
 
 				$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
@@ -389,20 +383,22 @@
 				}
 			} else return null;
 			
-			self::$_objectReferenceCache->cache($orcKey, $skeleton);
+			$this->orc->cache($orcKey, $skeleton);
 			$this->cm->cache(null, $skeleton);
-			return $skeleton;
+
+			return clone $skeleton; // necessary to "sever" the object from the reference cache
 		}
 
 		const PERSIST_MODE_INSERT = 0;
 		const PERSIST_MODE_UPDATE = 1;
 		const AUTO_GENERATED_TYPES = ['serial'];
-		public function persist($object) {
+		public function persist(&$object) {
 			$qf = QueryFactory::getFactory();
 			$mode = Repository::PERSIST_MODE_UPDATE;
 
 			foreach ($this->keys as $key) {
-				$value = $this->getFieldValue($object, $key);
+				$fieldName = $this->columnMap->get($key);
+				$value = $this->getFieldValue($object, $fieldName);
 				if ($value == null) {
 					$type = $this->getDefinition()->get("fields.{$key}.type");
 					if (!in_array($type, self::AUTO_GENERATED_TYPES)) {
@@ -418,10 +414,10 @@
 				$columns = $this->em->getNonForeignColumns($this->entity);
 
 				foreach ($columns as $column) {
-					$field = $this->columnMap->get($column);
-					$value = $this->getFieldValue($object, $field);
+					$fieldName = $this->columnMap->get($column);
+					$value = $this->getFieldValue($object, $fieldName);
 
-					if ($value != null && !in_array($field, $this->keys)) {
+					if ($value != null && !in_array($fieldName, $this->keys)) {
 						$qf->insert($column, $value);
 					}
 				}
@@ -429,31 +425,41 @@
 				$foreign = $this->em->getOneToOneMappedColumns($this->entity);
 
 				// todo: do I have to persist these foreign objects?
-				foreach ($foreign as $name => $foreign) {
-					// lmfao
+				foreach ($foreign as $name => $foreign) { // lmfao
 					$column = $foreign['column'];
-					$field = $this->columnMap->get($column);
+					$fieldName = $this->columnMap->get($column);
 
-					$fObject = $this->getFieldValue($object, $field);
-					$fRepo = $this->em->getRepository($foreign['entity']);
-					$fField = $fRepo->getColumnMap()->get($foreign['foreign']);
+					$fObject = $this->getFieldValue($object, $fieldName);
 
-					$value = $fRepo->getFieldValue($fObject, $fField);
+					if ($fObject != null) {
+						$fRepo = $this->em->getRepository($foreign['entity']);
+						$fFieldName = $fRepo->getColumnMap()->get($foreign['foreign']);
 
-					$qf->insert($column, $value);
+						$value = $fRepo->getFieldValue($fObject, $fFieldName);
+
+						$qf->insert($column, $value);
+					}
+				}
+
+				foreach ($this->keys as $key) {
+					$qf->returning([$key => null]);
 				}
 
 				$qf->into($this->getTable());
 				$query = $qf->getQuery();
-				//print($query);
-				//var_dump($query->getBinds());
-				$this->getConnection()->execute($query, $query->getBinds());
+
+				$result = $this->getConnection()->execute($query, $query->getBinds());
+				$object = $this->build($object, $result->fetchFirst());
 			} else {
+				$changed = $em->computeObjectChanges($object);
+
+
+
 				//$qf = $qf->update($this->getTable());
 				//print ($qf->getQuery());
 			}
 			
-			return true;
+			return $object;
 		}
 
 		public function generateColumnMap() {
@@ -468,9 +474,8 @@
 			return $columnMap;
 		}
 
-		public function getFieldValue($object, $field) {
+		public function getFieldValue($object, $fieldName) {
 			$useReflection = $this->config->get('use_reflection', false);
-			$fieldName = $this->columnMap->get($field);
 			$definition = $this->fields->sub($fieldName);
 
 			if ($useReflection) {
@@ -553,6 +558,16 @@
 
 		public function getDefinition() {
 			return $this->definition;
+		}
+
+		public function getPrimaryKeys($object = null) {
+			if ($object == null) return $this->keys;
+			else {
+				$self = $this;
+				return array_map(function($key) use ($object, $self) {
+					return $self->getFieldValue($object, $key);
+				}, $this->keys);
+			}
 		}
 
 		public function getTable() {
