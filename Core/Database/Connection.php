@@ -61,6 +61,14 @@
             );
 		}
 
+		public function __call($name, $arguments) {
+			$args = str_repeat('?, ', count($arguments) - 1) . " ?";
+			$ps = $this->prepare("SELECT * FROM {$name}({$args})");
+			$ps->execute($arguments);
+			
+			return $ps;
+		}
+
 		public function beginTransaction() {
 			return $this->driver->beginTransaction();
 		}
@@ -85,12 +93,36 @@
 			return $ps;
 		}
 
+		public function rollback() {
+			return $this->driver->rollback();
+		}
+
+		public function inTransaction() {
+			return $this->driver->inTransaction();
+		}
+
+		public function getAttribute($attribute) {
+			return $this->driver->getAttribute($attribute);
+		}
+
 		public function getConfig() {
 			return $this->config;
 		}
 
 		public function getDriver() {
 			return $this->driver;
+		}
+
+		public function getLastError() {
+			return $this->driver->errorInfo();
+		}
+
+		public function getLastErrorCode() {
+			return $this->driver->errorCode();
+		}
+
+		public function getLastId($name = null) {
+			return $this->driver->lastInsertId($name);
 		}
 
 		private function generatePreparedStatementName() {

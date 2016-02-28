@@ -5,6 +5,8 @@
     use Sebastian\Core\Entity\EntityInterface;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Repository\Repository;
+    use Sebastian\Core\Repository\Transformer\DatetimeTransformer;
+    use Sebastian\Core\Repository\Transformer\TransformerInterface;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
     
@@ -33,6 +35,7 @@
             $this->logger->setTag(self::$tag);
 
             $this->repositoryStore = new Collection();
+            $this->transformers = new Collection();
 
             // volatile storage to keep objects until the FPM process dies i.e. per Request
             if (EntityManager::$_objectReferenceCache == null) {
@@ -44,6 +47,8 @@
                     ])
                 );
             }
+
+            $this->addTransformer(new DatetimeTransformer());
         }
 
         public function delete($object) {
@@ -552,6 +557,22 @@
             }
 
             throw new SebastianException("No repository found for '{$class}'");
+        }
+
+        public function addTransformer(TransformerInterface $transformer) {
+            return $this->setTransformer($transformer->getName(), $transformer);
+        }
+
+        public function setTransformer($name, $transformer) {
+            return $this->transformers->set($name, $transformer);
+        }
+
+        public function getTransformer($name) {
+            return $this->transformers->get($name, null);
+        }
+
+        public function getTransformers() {
+            return $this->transformers;
         }
 
         /**

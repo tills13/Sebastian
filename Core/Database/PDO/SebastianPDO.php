@@ -9,7 +9,6 @@
 
 	abstract class SebastianPDO extends PDO {
 		protected $connection;
-		protected $transformer;
 		protected $config;
 
 		public function __construct(Connection $connection, $username, $password, Configuration $config) {
@@ -24,6 +23,7 @@
 			parent::__construct($dns, $username, $password, []);
 			
 			$this->setAttribute(PDO::ATTR_STATEMENT_CLASS, [Statement::class, [$this]]);
+			$this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); // todo configurable
 		}
 
 		public function setDriverName($driverName) {
@@ -32,13 +32,5 @@
 
 		public function getDriverName() {
 			return $this->driverName;
-		}
-
-		public function setTransformer(TransformerInterface $transformer) {
-			$this->transformer = $transformer;
-		}
-
-		public function getTransformer() {
-			return $this->transformer;
 		}
 	}

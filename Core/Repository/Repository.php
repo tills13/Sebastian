@@ -30,12 +30,9 @@
 		protected $definition;
 		
 		protected $connection;
-		protected $transformer;
-
 		protected $em;
 		protected $cm;
 		protected $orc;
-		
 		
 		public function __construct(Application $context, EntityManager $em, $entity = null, Configuration $config = null) {
 			$this->context = $context;
@@ -84,7 +81,6 @@
 			$this->logger = $this->context->getLogger(self::$tag);
 			$this->logger->setTag(self::$tag);
 			$this->connection = $this->em->getConnection();
-			$this->transformer = null;
 		}
 
 		/**
@@ -455,19 +451,22 @@
 
 		public function setFieldValue($object, $fieldName, $value) {
 			$useReflection = $this->config->get('use_reflection', false);
-			$definition = $this->fields->sub($fieldName);
+			$field = $this->fields->sub($fieldName);
+			$type = $field->get('type', null);
 
-			if ($this->transformer != null && $definition->has('transformer')) {
-				$tMethod = $definition->get('transformer', 'DEFAULT');
+			if ($type != null) {
+				if ($field->has('transformer')) {
+					$mTransformer = $field->get('transformer');	
+					$transformer = $this->em->getTransformer($mTransformer);
 
-				if ($tMethod == "DEFAULT") {
-					$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
-					$tMethod = "transform{$mFieldName}";
+					if ($transformer == null) {
+						throw new SebastianException("Unable to find transformer {$mTransformer}.");
+					}
+				} else $transformer = $this->em->getTransformer($type);
+				
+				if ($transformer != null) {
+					$value = $transformer->transform($value);
 				}
-
-				if (method_exists($this->transformer, $tMethod)) {
-					$value = $this->transformer->$tMethod($value);
-				} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
 			}
 
 			if ($useReflection) {
@@ -491,7 +490,8 @@
 
 		public function getFieldValue($object, $fieldName) {
 			$useReflection = $this->config->get('use_reflection', false);
-			$definition = $this->fields->sub($fieldName);
+			$field = $this->fields->sub($fieldName);
+			$type = $field->get('type', null);
 
 			if ($useReflection) {
 				$field = $this->reflection->getProperty($fieldName);
@@ -507,17 +507,12 @@
 				$value = $object->{$method}();
 			}
 
-			if ($this->transformer != null && $definition->has('transformer')) {
-				$tMethod = $definition->get('transformer', 'DEFAULT');
+			if ($type != null) {
+				$transformer = $this->em->getTransformer($type);
 
-				if ($tMethod == "DEFAULT") {
-					$mFieldName = strtoupper($fieldName[0]) . substr($fieldName, 1);
-					$tMethod = "reverseTransform{$mFieldName}";
+				if ($transformer != null) {
+					$value = $transformer->reverseTransform($value);
 				}
-
-				if (method_exists($this->transformer, $tMethod)) {
-					$value = $this->transformer->$tMethod($value);
-				} else throw new SebastianException(get_class($this->transformer) . " doesn't have {$tMethod} method");
 			}
 
 			return $value;
