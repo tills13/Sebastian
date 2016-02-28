@@ -159,15 +159,13 @@
 				$param = $matches[1];
 				$type = count($matches) >= 3 ? $matches[2] : "string"; 
 
-				if (isset($requirements[$param])) {
-					return "(?P<{$matches[1]}>{$requirements[$param]})";
-				}
+				if (isset($requirements[$param])) return "(?P<{$matches[1]}>{$requirements[$param]})";
 
 				if (in_array($type, ['text', 'string'])) return "(?P<{$param}>[^\/]+)";
 				else if (in_array($type, ['int', 'number', 'integer'])) return "(?P<{$param}>\d+)";
 			}, $route, -1, $count);
 
-			return $parsedRoute;
+			return "$parsedRoute\/?";
 		}
 
 		/**

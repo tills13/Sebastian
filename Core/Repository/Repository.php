@@ -321,7 +321,11 @@
 							if ($nMatches != 0) $objectParams[$matches[1]] = $row[$matches[0]];	
 						}
 
-						$value = $repo->get($objectParams);
+						try {
+							$value = $repo->get($objectParams);
+						} catch (SebastianException $e) {
+							$value = null;
+						}
 					} else {
 						if (array_key_exists('join', $mapped)) {
 							$column = explode(':', $mapped['join']['joinColumnForeign'])[1];
