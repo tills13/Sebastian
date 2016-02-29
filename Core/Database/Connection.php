@@ -83,6 +83,9 @@
 		}
 
 		public function execute($query, $params = []) {
+			if (is_object($query)) $query = (string) $query;
+			if ($params instanceof Collection) $params = $params->toArray();
+
 			$ps = $this->prepare($query);
 			$ps->execute($params);
 			return $ps;

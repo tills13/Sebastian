@@ -138,6 +138,7 @@
 			
 			$this->routes->set($name, [
 				'match' => $this->generateRouteRegex($route, $requirements),
+				'route' => $route,
 				'component' => $component,
 				'controller' => $controller,
 				'method' => $method,

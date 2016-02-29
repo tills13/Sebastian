@@ -183,7 +183,8 @@
 				}
 			}
 
-			$qf = $qf->where($expression);
+			if ($expression) $qf = $qf->where($expression);
+
 			$result = $this->connection->execute($qf->getQuery(), []);
 			$results = $result->fetchAll() ?: [];
 
@@ -192,7 +193,7 @@
 
 				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
 					$repo = $this->em->getRepository($mapped['entity']);
-					$this->logger->info("{$this->entity} repo {$mapped['entity']}");
+					//$this->logger->info("{$this->entity} repo {$mapped['entity']}");
 
 					$params = [];
 					foreach ($mResult as $key => $value) {
@@ -200,7 +201,10 @@
 						if ($nMatches != 0) $params[$matches[1]] = $mResult[$matches[0]];
 					}
 					
-					$entity = $repo->get($params);
+					try {
+						$entity = $repo->get($params);
+					} catch (SebastianException $e) { $entity = null; }
+					
 					$skeleton = $this->build($skeleton, [$mapped['column'] => $entity]);
 				}
 
@@ -243,6 +247,7 @@
 				throw new SebastianException("One of [{$keys}] must be provided for entity {$this->entity}", 500);
 			}
 
+			// check temp cache
 			$skeleton = $this->initializeObject($params);
 			$orcKey = $this->orc->generateKey($skeleton);
 
@@ -251,6 +256,12 @@
 				return $this->orc->load($orcKey);
 			} else {
 				$this->orc->cache($orcKey, $skeleton);
+			}
+
+			// then check long term cache
+			$cmKey = $this->cm->generateKey($skeleton);
+			if ($this->cm->isCached($cmKey)) {
+				return $this->cm->load($cmKey);
 			}
 
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
@@ -428,7 +439,7 @@
 				$query = $qf->getQuery();
 
 				$result = $this->getConnection()->execute($query, $query->getBinds());
-				$object = $this->build($object, $result->fetchFirst());
+				$object = $this->build($object, $result->fetchAll()[0]);
 			} else {
 				$changed = $em->computeObjectChanges($object);
 
@@ -437,6 +448,9 @@
 				//$qf = $qf->update($this->getTable());
 				//print ($qf->getQuery());
 			}
+
+			$key = $this->cm->generateKey($object);
+			$this->cm->invalidate($key);
 			
 			return $object;
 		}

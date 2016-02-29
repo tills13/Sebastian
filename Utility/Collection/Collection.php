@@ -1,7 +1,7 @@
 <?php
 	namespace Sebastian\Utility\Collection;
 
-	class Collection implements \ArrayAccess,\Iterator {
+	class Collection implements \ArrayAccess,\Iterator,\JsonSerializable {
 		private $position;
 		private $_collection;
 
@@ -154,5 +154,9 @@
 
 		public function toArray() {
 			return $this->_collection;
+		}
+
+		public function jsonSerialize() {
+			return $this->toArray();
 		}
 	}
