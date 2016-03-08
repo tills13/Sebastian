@@ -19,9 +19,9 @@
 			$this->config = $config;
 		}
 
-		/*public function bind($key, $value) {
-			$this->query->bind($key, $value);
-		}*/
+		public function bind($key, $value) {
+			$this->query->addBind($key, $value);
+		}
 
 		public function select() {
 			$this->query = new Query();

@@ -123,11 +123,15 @@
 			$qf = $qf->where($mEf->getExpression());
 			$query = $qf->getQuery();
 
-			$result = $this->connection->execute($query, []);
+			try {
+				$result = $this->connection->execute($query, []);
 
-			if ($result->getError() == null) return true;
-			else {
-				throw new SebastianException("Could not delete {$this->getClass()}: {$result->getError()}");
+				$key = $this->cm->generateKey($object);
+				$this->cm->invalidate($key);
+
+				return true;
+			} catch (\Exception $e) {
+				throw new SebastianException("Could not delete {$this->getClass()}: {$e->getMessage()}");
 			}
 		}
 
@@ -301,21 +305,27 @@
 
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
-			foreach ($this->keys as $key) {
+			foreach ($this->keys as $name => $key) {
 				$fieldName = $this->columnMap->get($key);
 				$value = $this->getFieldValue($skeleton, $fieldName);
-				if ($value == null) throw new SebastianException("Primary Key {$key} cannot be null/blank");
+				if ($value != null) {
+						//throw new SebastianException("Primary Key {$key} cannot be null/blank");
 
-				$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
-					->equals($value); // generates the individual expression
+					$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
+						->equals(":$fieldName"); // generates the individual expression
 
-				$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
+					$qf->bind($fieldName, $value);
+
+					$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
+				} else {
+					throw new SebastianException("Primary Key {$key} cannot be null/blank");
+				}
 			}
 
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
 
-			$statement = $this->connection->execute($query, []);
+			$statement = $this->connection->execute($query, $query->getBinds());
 			$results = $statement->fetchAll();
 
 			if ($results) {
@@ -399,7 +409,6 @@
 				}
 			}
 
-
 			if ($mode == Repository::PERSIST_MODE_INSERT) {
 				$columns = $this->em->getNonForeignColumns($this->entity);
 
@@ -440,6 +449,7 @@
 
 				$result = $this->getConnection()->execute($query, $query->getBinds());
 				$object = $this->build($object, $result->fetchAll()[0]);
+				$this->refresh($object);
 			} else {
 				$changed = $em->computeObjectChanges($object);
 
@@ -453,6 +463,10 @@
 			$this->cm->invalidate($key);
 			
 			return $object;
+		}
+
+		public function refresh(&$object) {
+			$object = $object;//$this->get()
 		}
 
 		public function generateColumnMap() {

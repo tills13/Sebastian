@@ -1,7 +1,7 @@
 <?php
 	namespace Sebastian\Core\Session;
 
-	use Sebastian\Core\Entity\User;
+	use Sebastian\Core\Entity\UserInterface;
 	
 	/**
 	 * Session
@@ -32,7 +32,7 @@
 			if (!$token && !is_null($this->get('session_user', null))) {
 				$user = $this->get('session_user');
 				$expire = time() + 60 * 60 * 24 * 5; // five days
-				setcookie('token', $user->getToken(), $expire);
+				//setcookie('token', $user->getToken(), $expire);
 			}
 
 			//$this->set('session_user', 'tullsy');
@@ -43,15 +43,15 @@
 		}
 
 		public function reload() {
-			$token = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
+			//$token = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
 			$user = $this->get('session_user', null);
 			
-			if ($user && (!$token || $token != $user->getToken())) {
-				$token = $user->getToken();
-				$this->setCookie('token', $token);
-			}
+			//if ($user && (!$token || $token != $user->getToken())) {
+				//$token = $user->getToken();
+				//$this->setCookie('token', $token);
+			//}
 
-			$this->set('session_token', $token);
+			//$this->set('session_token', $token);
 		}
 
 		public function destroy() {
@@ -84,6 +84,7 @@
 		}
 
 		public function check() {
+			//var_dump($_SESSION['session_user']);
 			return ($_SESSION['session_user'] != null);
 		}
 
@@ -92,7 +93,7 @@
 			setcookie($field, $value, $expires);
 		}
 
-		public function setUser(User $user) {
+		public function setUser(UserInterface $user) {
 			$this->set('session_user', $user);
 			return $this;
 		}

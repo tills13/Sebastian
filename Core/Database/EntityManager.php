@@ -19,9 +19,11 @@
     class EntityManager {
         protected static $tag = "EntityManager";
 
-        private $context;
-        private $definitions; // orm definitions
-        private $repositories;
+        protected $context;
+        protected $definitions; // orm definitions
+        protected $repositories;
+        protected $transformers;
+        protected $logger;
 
         protected static $_objectReferenceCache;
 
@@ -52,41 +54,24 @@
         }
 
         public function delete($object) {
-            if (!is_array($object)) $object = [$object];
-
-            foreach ($object as $mObject) {
-                $class = $this->getBestGuessClass(get_class($mObject)); // hack
+            $objects = func_get_args();
+            foreach ($objects as $object) {
+                $class = $this->getBestGuessClass(get_class($object)); // todo verify
                 $repo = $this->getRepository($class);
                 
-                if ($repo != null) {
-                    if (!$repo->delete($mObject)) {
-                        throw new SebastianException("something went wrong deleting the object");
-                    }
-                } else {
-                    throw new SebastianException("something went wrong");
-                }
+                if ($repo) $repo->delete();
             }
         }
         
-        public function persist($object, $parent = null) {
-            if (!is_array($object)) $object = [$object];
+        public function persist() {
+            $objects = func_get_args();
 
-            foreach ($object as $mObject) {
-                $class = get_class($mObject);
-
+            foreach ($objects as $object) {
+                $class = $this->getBestGuessClass(get_class($object)); // todo verify
                 $repo = $this->getRepository($class);
-                if ($repo != null) {
-                    if (!$repo->persist($mObject, $parent)) {
-                        throw new SebastianException("something went wrong persisting the object");
-                    }
-                } else {
-                    throw new SebastianException("something went wrong");
-                }
-            }
-        }
 
-        public function persistOne($object, $parent) {
-            return $this->persist([$object], $parent);
+                if ($repo) $repo->persist($object);
+            }
         }
 
         /**
@@ -94,51 +79,15 @@
          * @param  Entity $object the entity to refresh
          * @return Entity $object
          */
-        public function refresh($object) {
-            $class = get_class($mObject);
-            $repo = $this->getRepository($class);
-            return $repo->refresh($object);
-        }
+        public function refresh() {
+            $objects = func_get_args();
 
-        /**
-         * computes all the changed fields
-         * @param  Entity $object
-         * @return array []
-         */
-        public function computeObjectChanges($object) {
-            $objectKey = $this->getObjectCache()->generateKey($object);
-            $cached = $this->getObjectCache()->load($objectKey);
+            foreach ($objects as &$object) {
+                $class = $this->getBestGuessClass(get_class($object)); // todo verify
+                $repo = $this->getRepository($class);
 
-            $class = $this->getBestGuessClass(get_class($object));
-            $definition = $this->getDefinition($class);
-            $repo = $this->getRepository($class);
-            
-            $changed = [];
-            foreach ($definition->sub('fields') as $name => $field) {
-                $objectVal = $repo->getFieldValue($object, $name);
-                $cachedVal = $repo->getFieldValue($cached, $name);
-
-                if ($field->has('entity')) {
-                    if (in_array($field->get('relation'), ['1:1', 'one', 'onetoone'])) {
-                        $mRepo = $this->getRepository(get_class($objectVal));
-                        $keysA = $mRepo->getPrimaryKeys($objectVal);
-                        $keysB = $mRepo->getPrimaryKeys($cachedVal);
-
-                        if ($keysA !== $keysB) $changed[] = $name;
-                        else {
-                            // todo figure this shit out
-                            // $mChanges = $this->computeObjectChanges($objectVal);
-                            // if (count($mChanges) != 0) $changed[] = $name;
-                        }
-                    } else if (in_array($field->get('relation'), ['1:x', 'many'])) {
-                    } else if ($field->has('join')) {
-                    } else { /* ???? */ }
-                } else {
-                    if ($objectVal != $cachedVal) $changed[] = $name;
-                }  
+                if ($repo) $repo->refresh($object);
             }
-
-            return $changed;
         }
 
         public function computeColumnSets($class, $joins, $aliases) {
@@ -264,6 +213,47 @@
             return $joins;
         }
 
+         /**
+         * computes all the changed fields
+         * @param  Entity $object
+         * @return array []
+         */
+        public function computeObjectChanges($object) {
+            $objectKey = $this->getObjectCache()->generateKey($object);
+            $cached = $this->getObjectCache()->load($objectKey);
+
+            $class = $this->getBestGuessClass(get_class($object));
+            $definition = $this->getDefinition($class);
+            $repo = $this->getRepository($class);
+            
+            $changed = [];
+            foreach ($definition->sub('fields') as $name => $field) {
+                $objectVal = $repo->getFieldValue($object, $name);
+                $cachedVal = $repo->getFieldValue($cached, $name);
+
+                if ($field->has('entity')) {
+                    if (in_array($field->get('relation'), ['1:1', 'one', 'onetoone'])) {
+                        $mRepo = $this->getRepository(get_class($objectVal));
+                        $keysA = $mRepo->getPrimaryKeys($objectVal);
+                        $keysB = $mRepo->getPrimaryKeys($cachedVal);
+
+                        if ($keysA !== $keysB) $changed[] = $name;
+                        else {
+                            // todo figure this shit out
+                            // $mChanges = $this->computeObjectChanges($objectVal);
+                            // if (count($mChanges) != 0) $changed[] = $name;
+                        }
+                    } else if (in_array($field->get('relation'), ['1:x', 'many'])) {
+                    } else if ($field->has('join')) {
+                    } else { /* ???? */ }
+                } else {
+                    if ($objectVal != $cachedVal) $changed[] = $name;
+                }  
+            }
+
+            return $changed;
+        }
+
         public function generateTableAliases($class, $joins = []) {
             $mTables = [];
             $mTables[$class] = substr($this->getTable($class), 0, 1);
@@ -324,8 +314,6 @@
                 $namespace = $this->context->getNamespace();
                 //$component
             }
-
-
         }
 
         /**
@@ -334,37 +322,20 @@
          * @return [type]        [description]
          */
         public function getBestGuessClass($class) {
-
-
-
-
-            //var_dump($class);
             $namespace = $this->context->getNamespace();
             $components = $this->context->getComponents();
             $bestGuessSimpleClass = strstr($class, '\\') ? substr($class, strrpos($class, '\\') + 1) : $class;
 
-
-            //var_dump($bestGuessSimpleClass);
-            //var_dump($class);
-            //var_dump($this->repositories);
             if ($this->repositories->has($class)) {
-                //print ("here");
-                //return $this->repositories->
                 return $class;
             }
 
             foreach ($components as $component) {
                 $path = $component->getNamespacePath();
-
                 $classPath = "{$namespace}\\{$path}\\Entity\\{$bestGuessSimpleClass}";
-                //print ($classPath);
 
-                if ($classPath == $class) {
-                    return $bestGuessSimpleClass;
-                }
+                if ($classPath == $class) return $bestGuessSimpleClass;
             }
-
-            //print ("null");
 
             return null;
         }
@@ -375,20 +346,6 @@
 
         public function getDefinition($class) {
             return $this->definitions->sub($class);
-        }
-
-        /**
-         * [getForeignKeys description]
-         * @param  [type] $entityA [description]
-         * @param  [type] $entityB [description]
-         * @return [type]          [description]
-         *
-         * @todo implement
-         */
-        public function getForeignKeys($entityA, $entityB) {
-            if (!in_array($this->defitions[$entityA]) || !in_array($this->definitions[$entityB])) {
-                throw new \Exception("No definition found for either '{$entityA}' or '{$entityB}'");
-            }
         }
 
         public function getMultiMappedFields($entity) {
@@ -583,9 +540,8 @@
          * @todo resolve class if not found
          */
         public function getTable($class) {
-            //var_dump($this->definitions);
             if (!$this->definitions->has($class)) {
-                throw new SebastianException("Unknown class '{$class}'");//SebastianException
+                throw new SebastianException("Unknown class '{$class}'");
             }
 
             return $this->definitions->get("{$class}.table");

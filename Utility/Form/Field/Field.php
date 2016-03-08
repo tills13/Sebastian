@@ -15,6 +15,7 @@
 	 */
 	abstract class Field {
 		const TYPE_INPUT = 'input';
+		const TYPE_PASSWORD = 'input';
 		const TYPE_DEFAULT = Field::TYPE_INPUT;
 		const TYPE_SELECT = 'select';
 		const TYPE_CHECKBOX = 'checkbox';

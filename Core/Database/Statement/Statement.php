@@ -3,6 +3,7 @@
 
 	use \PDO as PDO;
 	use \PDOStatement as PDOStatement;
+	use \PDOException as PDOException;
 	use Sebastian\Core\Database\PDO\SebastianPDO;
 	use Sebastian\Core\Database\Transformer\TransformerInterface;
 
@@ -12,6 +13,12 @@
 
 		protected function __construct(SebastianPDO $pdo) {
 			$this->pdo = $pdo;
+		}
+
+		public function execute(array $params = []) {
+			try { parent::execute($params); } catch (PDOException $e) {
+				throw $e;
+			}
 		}
 
 		public function getColumnType($column) {

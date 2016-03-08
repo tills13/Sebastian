@@ -54,6 +54,7 @@
 			if ($type == "select") $field = new Field\SelectField($this->form, $name, $params);
 			else if ($type == "textarea") $field = new Field\TextAreaField($this->form, $name, $params);
 			else if (in_array($type, ["input", "text"])) $field = new Field\InputField($this->form, $name, $params);
+			else if (in_array($type, ["password"])) $field = new Field\PasswordField($this->form, $name, $params);
 			else if ($type == "checkbox") $field = new Field\CheckboxField($this->form, $name, $params);
 			else throw new \Exception("Cannot find field of type {$type}", 1);
 			

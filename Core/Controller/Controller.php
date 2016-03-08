@@ -113,7 +113,7 @@
 
 		public function generateUrl($routeName, $args = []) {
 			// todo replace with getRoute()
-			$route = $this->getContext()->getRouter()->getRoutes()[$routeName]['match'];
+			$route = $this->getContext()->getRouter()->getRoutes()[$routeName]['route'];
 			foreach ($args as $key => $arg) {
 				$match = preg_match("/{($key(?:\:[^\}]*)?)}/", $route);
 

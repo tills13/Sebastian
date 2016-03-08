@@ -127,14 +127,4 @@
 		public function getLastId($name = null) {
 			return $this->driver->lastInsertId($name);
 		}
-
-		private function generatePreparedStatementName() {
-			$count = $this->preparedStatements->count();
-			do {
-				$name = "st_{$count}";
-				$count++;
-			} while($this->preparedStatements->has($name));
-
-			return $name;
-		}
 	}
