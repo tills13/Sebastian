@@ -47,7 +47,10 @@
 
             $this->session = Session::fromGlobals($this);
             $this->registerComponents();
-            $this->checkComponentRequirements();
+
+            //print (count($this->components) . " components loaded");
+            //print ("using " . $this->getComponent()->getName());
+            //$this->checkComponentRequirements();
 
             if (count($this->components) == 0) {
                 throw new SebastianException("At least one component must be registered");
@@ -106,7 +109,9 @@
         }
 
         public function registerComponent(Component $component) {
-            $this->components[strtolower($component->getName())] = $component;
+            if ($component->checkRequirements($this)) {
+                $this->components[strtolower($component->getName())] = $component;
+            }
         }
 
         public function registerServices() {
@@ -132,9 +137,20 @@
             }
         }
 
-        public function getComponent($name) {
-            $name = strtolower($name);
-            return isset($this->components[$name]) ? $this->components[$name] : null;
+        public function getComponent($name = null) {
+            if (is_null($name)) {
+                $component = null;
+                foreach ($this->getComponents() as $mComponent) {
+                    if (!$component || $mComponent->getWeight() > $component->getWeight()) {
+                        $component = $mComponent;
+                    }
+                }
+
+                return $component;
+            } else {
+               $name = strtolower($name);
+                return isset($this->components[$name]) ? $this->components[$name] : null; 
+            }
         }
 
         public function getCacheManager() {

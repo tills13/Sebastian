@@ -157,8 +157,8 @@
 				if ($param instanceof Expression) {
 
 				} else {
-					$with = "{$this->aliases[$this->entity]}.{$with}";
-					$ef = $ef->reset()->expr($with);
+					$lhs = "{$this->aliases[$this->entity]}.{$with}";
+					$ef = $ef->reset()->expr($lhs);
 
 					if (is_array($param)) {
 						print ("IN");
@@ -175,7 +175,8 @@
 						else if ($operator == '>') $ef = $ef->greaterThan($param);
 					} else {
 						//$param = "{$this->aliases[$this->entity]}.{$param}";
-						$ef = $ef->equals($param);
+						$qf->bind($with, $param);
+						$ef = $ef->equals(":$with");
 					}
 
 					if ($expression) {
@@ -189,7 +190,8 @@
 
 			if ($expression) $qf = $qf->where($expression);
 
-			$result = $this->connection->execute($qf->getQuery(), []);
+			$query = $qf->getQuery();
+			$result = $this->connection->execute($query, $query->getBinds());
 			$results = $result->fetchAll() ?: [];
 
 			foreach ($results as $mResult) {
@@ -224,6 +226,10 @@
 			}
 
 			return $mSkeletons;
+		}
+
+		public function findOne($where = []) {
+			
 		}
 
 		/**
