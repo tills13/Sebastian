@@ -123,12 +123,12 @@
             $this->options['tag'] = $tag;
         }
 
-        public function log($level, $message) {
+        public function log($level, $tag = null, $message) {
             if ($this->logLevels[$this->logLevelThreshold] < $this->logLevels[$level]) {
                return;
             }
 
-            $message = $this->formatMessage($level, $message);        
+            $message = $this->formatMessage($level, $tag, $message);   
             $this->write($message);
         }
 
@@ -155,10 +155,11 @@
             return $this->lastLine;
         }
 
-        private function formatMessage($level, $message) {
+        private function formatMessage($level, $tag = '', $message) {
             $level = strtoupper($level);
-            if ($this->options['tag']) $tag = ':' . strtoupper($this->options['tag']);
-            else $tag = '';
+            if (is_null($tag) && $this->options['tag']) {
+                $tag = ':' . strtoupper($this->options['tag']);
+            } else $tag = ":{$tag}";
 
             return "[{$this->getTimestamp()}] [{$level}{$tag}] {$message}" . PHP_EOL;
         }
@@ -177,35 +178,35 @@
     }
 
     class LoggingInterface {
-        public function emergency($message) {
-            $this->log(Logger::EMERGENCY, $message);
+        public function emergency($message, $tag = null) {
+            $this->log(Logger::EMERGENCY, $tag, $message);
         }
 
-        public function alert($message) {
-            $this->log(Logger::ALERT, $message);
+        public function alert($message, $tag = null) {
+            $this->log(Logger::ALERT, $tag, $message);
         }
         
-        public function critical($message) {
-            $this->log(Logger::CRITICAL, $message);
+        public function critical($message, $tag = null) {
+            $this->log(Logger::CRITICAL, $tag, $message);
         }
 
-        public function error($message) {
-            $this->log(Logger::ERROR, $message);
+        public function error($message, $tag = null) {
+            $this->log(Logger::ERROR, $tag, $message);
         }
         
-        public function warning($message) {
-            $this->log(Logger::WARNING, $message);
+        public function warning($message, $tag = null) {
+            $this->log(Logger::WARNING, $tag, $message);
         }
         
-        public function notice($message) {
-            $this->log(Logger::NOTICE, $message);
+        public function notice($message, $tag = null) {
+            $this->log(Logger::NOTICE, $tag, $message);
         }
         
-        public function info($message) {
-            $this->log(Logger::INFO, $message);
+        public function info($message, $tag = null) {
+            $this->log(Logger::INFO, $tag, $message);
         }
        
-        public function debug($message) {
-            $this->log(Logger::DEBUG, $message);
+        public function debug($message, $tag = null) {
+            $this->log(Logger::DEBUG, $tag, $message);
         }
     }

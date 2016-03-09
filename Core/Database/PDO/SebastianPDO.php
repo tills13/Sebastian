@@ -6,14 +6,17 @@
 	use Sebastian\Core\Database\Statement\Statement;
 	use Sebastian\Core\Database\Transformer\TransformerInterface;
 	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Utility\Logging\Logger;
 
 	abstract class SebastianPDO extends PDO {
 		protected $connection;
 		protected $config;
+		protected $logger;
 
 		public function __construct(Connection $connection, $username, $password, Configuration $config) {
 			$this->connection = $connection;
 			$this->config = $config;
+			$this->logger = $connection->getLogger();
 
 			$dns = "{$this->getDriverName()}:
 						host={$config->get('hostname')};
@@ -32,5 +35,13 @@
 
 		public function getDriverName() {
 			return $this->driverName;
+		}
+
+		public function setLogger(Logger $logger) {
+			$this->logger = $logger;
+		}
+
+		public function getLogger() {
+			return $this->logger;
 		}
 	}

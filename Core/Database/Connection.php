@@ -6,6 +6,7 @@
 	use Sebastian\Core\Database\Statement\PreparedStatement;
 	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Utility\Logging\Logger;
 
 	/**
 	 * Connection
@@ -18,6 +19,7 @@
 		protected $context;
 		protected $config;
 		protected $preparedStatements;
+		protected $logger;
 
 		public function __construct($context, Configuration $config) {
 			$this->context = $context;
@@ -36,9 +38,10 @@
 				]
 			]);
 
-			$this->initializeDriver($config->get('driver'));
+			$this->logger = $context->getLogger('connection');
 			$this->cm = $context->getCacheManager();
 			$this->preparedStatements = new Collection();
+			$this->initializeDriver($config->get('driver'));
 		}
 
 		// todo needs to handle overrides properly (for custom drivers)
@@ -126,5 +129,13 @@
 
 		public function getLastId($name = null) {
 			return $this->driver->lastInsertId($name);
+		}
+
+		public function setLogger(Logger $logger) {
+			$this->logger = $logger;
+		}
+
+		public function getLogger() {
+			return $this->logger;
 		}
 	}
