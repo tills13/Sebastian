@@ -1,6 +1,7 @@
 <?php
 	namespace Sebastian\Utility\Configuration;
 
+	use \APP_ROOT;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Utility\Utils;
 
@@ -9,10 +10,16 @@
 		const TYPE_JSON = 1;
 
 		public static function fromFilename($filename, $defaults = []) {
-			return Configuration::fromPath(\APP_ROOT . "/../config/{$filename}", true, $defaults);
+			return Configuration::fromPath("../config/{$filename}", true, $defaults);
 		}
 
-		public static function fromPath($path, $relativeToAppRoot = true, $defaults = []) {
+		public static function fromPath($path, $relativeToAppRoot = false, $defaults = []) {
+			if ($relativeToAppRoot) {
+				$path = APP_ROOT . DIRECTORY_SEPARATOR . $path;
+			}
+
+			print ($path); print("<br/>");
+
             if (!file_exists($path)) return null;
 
             $fileType = strtolower(Utils::getExtension($path));

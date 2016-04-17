@@ -39,6 +39,12 @@
 			return $this;
 		}
 
+		public function load(Application $context, $filename) {
+			$component = $context->getComponent();
+			$resourceUri = $component->getResourceUri("form/auth/register.yaml");
+			return $this->buildFromConfig(Configuration::fromPath($resourceUri, true));
+		}
+
 		public function createNamedForm($name) {
 			$this->form = new Form($name);
 			return $this;

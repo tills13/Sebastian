@@ -17,8 +17,6 @@
      * @since  Oct. 2015
      */
     class EntityManager {
-        protected static $tag = "EntityManager";
-
         protected $context;
         protected $definitions; // orm definitions
         protected $repositories;
@@ -33,8 +31,7 @@
             $this->repositories = $config;
             //var_dump($config);
             $this->definitions = Configuration::fromFilename('orm.yaml');//$context->loadConfig("orm.yaml");
-            $this->logger = $context->getLogger(self::$tag);
-            $this->logger->setTag(self::$tag);
+            $this->logger = $context->getLogger();
 
             $this->repositoryStore = new Collection();
             $this->transformers = new Collection();

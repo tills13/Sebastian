@@ -33,8 +33,7 @@
                 ]
             ]);
 
-            $this->logger = $this->context->getLogger('cache');
-            $this->logger->setTag(self::$tag);
+            $this->logger = $this->context->getLogger();
             $this->initializeDriver($this->config->get('driver'));
         }
 

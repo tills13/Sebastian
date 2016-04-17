@@ -1,6 +1,7 @@
 <?php	
 	namespace Sebastian\Core\Database;
 
+	use \PDO;
 	use Sebastian\Core\Exception\SebastianException;
 	use Sebastian\Core\Database\Exception\DatabaseException;
 	use Sebastian\Core\Database\Statement\PreparedStatement;
@@ -38,7 +39,7 @@
 				]
 			]);
 
-			$this->logger = $context->getLogger('connection');
+			$this->logger = $context->getLogger();
 			$this->cm = $context->getCacheManager();
 			$this->preparedStatements = new Collection();
 			$this->initializeDriver($config->get('driver'));
@@ -97,6 +98,10 @@
 		public function prepare($query, array $options = []) {
 			$ps = $this->driver->prepare($query, $options);
 			return $ps;
+		}
+
+		public function quote($string, $params = PDO::PARAM_STR) {
+			return $this->driver->quote($string, $params);
 		}
 
 		public function rollback() {

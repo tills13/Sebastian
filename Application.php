@@ -21,7 +21,7 @@
      * @author Tyler <tyler@sbstn.ca>
      * @since  Oct. 2015
      */
-    abstract class Application {
+    class Application {
         protected $kernel;
         protected $config;
 
@@ -40,7 +40,7 @@
 
             $this->components = [];
             
-            $this->loggers = new Collection();
+            $this->logger = new Logger($this, $config->sub('logging'));
             $this->cacheManager = new CacheManager($this, $config->sub('cache'));
             $this->connection = new Connection($this, $config->sub('database'));
             $this->entityManager = new EntityManager($this, $config->sub('entity'));
@@ -99,7 +99,9 @@
             $this->exceptionHandlers[] = $handler;
         }
 
-        abstract function registerComponents();
+        public function registerComponents() {
+            // todo
+        }
 
         public function checkComponentRequirements() {
             foreach ($this->components as $component) {
@@ -135,6 +137,10 @@
                 $service->boot();
                 $this->services[$key] = $service;
             }
+        }
+
+        public function getApplicationName() {
+            return $this->config->get('application.name');
         }
 
         public function getComponent($name = null) {
@@ -193,20 +199,12 @@
             return $this->session;
         }
 
-        public function getDefaultLogFilename() {
-            return "{$this->config->get('application.name')}.log";
-        }
-
         public function getDefaultLogPath() {
-            return "/var/log/{$this->config->get('application.name')}/";
+            $name = strtolower($this->config->get('application.name'));
+            return "/var/log/{$name}";
         }
 
-        public function getLogger($name = 'default', $options = []) {
-            if ($this->loggers->has($name)) {
-                return $this->loggers->get($name);
-            } else {
-                $this->loggers->set($name, new Logger($this, new Configuration($options)));
-                return $this->getLogger($name);
-            }
+        public function getLogger() {
+            return $this->logger;
         }
     }

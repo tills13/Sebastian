@@ -78,8 +78,7 @@
 
 			// convenience
 			$this->cm = $this->context->getCacheManager();
-			$this->logger = $this->context->getLogger(self::$tag);
-			$this->logger->setTag(self::$tag);
+			$this->logger = $this->context->getLogger();
 			$this->connection = $this->em->getConnection();
 		}
 
@@ -262,7 +261,7 @@
 			$orcKey = $this->orc->generateKey($skeleton);
 
 			if ($this->orc->isCached($orcKey)) {
-				$this->logger->info("hit _orc with {$orcKey}");
+				$this->logger->info("hit _orc with {$orcKey}", "repo_log");
 				return $this->orc->load($orcKey);
 			} else {
 				$this->orc->cache($orcKey, $skeleton);

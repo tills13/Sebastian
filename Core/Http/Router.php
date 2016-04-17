@@ -61,7 +61,7 @@
 			$namespace = $this->getContext()->getNamespace();
 
 			$paths = [
-				\APP_ROOT . "/../config/routing.yaml", // master routing file, if required
+				"../config/routing.yaml", // master routing file, if required
 				SEBASTIAN_ROOT . "/Core/Resources/config/routing.yaml" // internal for css/js/font/assets
 			]; // add default routes
 

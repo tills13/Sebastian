@@ -12,6 +12,7 @@
 			$this->sendHttpResponseCode();
 			$this->sendHeaders();
 
+			//$session = $this->
 			require $this->content;
 		}
 	}

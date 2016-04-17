@@ -41,6 +41,8 @@
                 $applicationPath = "\\{$namespace}\\{$appClass}";
 
                 $this->application = new $applicationPath($this, $this->config);
+            } else {
+                $this->application = new Application($this, $this->config);
             }
         }
 

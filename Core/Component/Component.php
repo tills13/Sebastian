@@ -65,6 +65,13 @@
 			return ($this->requirements != null && $this->requirements->count() != 0);
 		}
 
+		public function getResourceUri($uri) {
+
+
+			return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
+			//return $this->getNamespacePath() . DIRECTORY_SEPARATOR . "Resources" . DIRECTORY_SEPARATOR 
+		}
+
 		public function setWeight($weight) {
 			$this->weight = $weight;
 		}

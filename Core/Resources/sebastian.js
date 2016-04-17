@@ -1,6 +1,5 @@
 var Sebastian = function(options = {}) {
 	this.options = $.extend({
-
 	}, options);
 }
 

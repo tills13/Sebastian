@@ -1,53 +1,43 @@
 <?php
     namespace Sebastian\Utility\Logging;
 
+    use \RuntimeException;
     use Sebastian\Core\Application;
     use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Logging\Handler\FileLogHandler;
+    use Sebastian\Utility\Logging\Handler\LogHandlerInterface;
 
     /**
      * Logger
-     *
-     * logging
      *  
      * @author Tyler <tyler@sbstn.ca>
      * @since Oct. 2015
      */
     class Logger extends LoggingInterface {
-        const EMERGENCY = 'emergency';
-        const ALERT     = 'alert';
-        const CRITICAL  = 'critical';
-        const ERROR     = 'error';
-        const WARNING   = 'warning';
-        const NOTICE    = 'notice';
-        const INFO      = 'info';
-        const DEBUG     = 'debug';
+        const EMERGENCY = 'EMERGENCY';
+        const ALERT = 'ALERT';
+        const CRITICAL = 'CRITICAL';
+        const ERROR = 'ERROR';
+        const WARNING = 'WARNING';
+        const NOTICE = 'NOTICE';
+        const INFO = 'INFO';
+        const DEBUG = 'DEBUG';
 
-        private $options = [
-            'extension' => 'log',
-            'dateFormat' => 'm-d G:i:s',
-            'filename' => false,
-            'flushFrequency' => false,
-            'prefix' => 'log_',
-            'tag' => false
-        ];
-
-        private $logFilePath;
         private $logLevelThreshold = Logger::DEBUG;
-        private $logLineCount = 0;
         private $logLevels = [
             Logger::EMERGENCY => 0,
-            Logger::ALERT     => 1,
-            Logger::CRITICAL  => 2,
-            Logger::ERROR     => 3,
-            Logger::WARNING   => 4,
-            Logger::NOTICE    => 5,
-            Logger::INFO      => 6,
-            Logger::DEBUG     => 7
+            Logger::ALERT => 1,
+            Logger::CRITICAL => 2,
+            Logger::ERROR => 3,
+            Logger::WARNING => 4,
+            Logger::NOTICE => 5,
+            Logger::INFO => 6,
+            Logger::DEBUG => 7
         ];
 
-        private $fileHandle;
-        private $lastLine = '';
-        private $defaultPermissions = 0777;
+        protected $context;
+        protected $config;
+        protected $handlers;
 
         //public function __construct($logDirectory, $logLevelThreshold = Logger::DEBUG, $options = []) {
         public function __construct($context, Configuration $config = null) {
@@ -55,158 +45,128 @@
 
             if (!$config) $config = new Configuration();
             $this->config = $config->extend([
-                'directory' => $context->getDefaultLogPath(),
-                'filename' => $context->getDefaultLogFilename(),
-                'threshold' => 6
+                'format' => "{date} [{level}{tag}] {message}",
+                'date_format' => "m-d G:i:s",
+                'threshold' => Logger::INFO
             ]);
 
-            $logDirectory = rtrim(
-                $this->config->get('directory') . $this->config->get('filename'),
-                DIRECTORY_SEPARATOR
-            );
+            $this->handlers = [];
+            $this->addHandlersFromConfig();
+        }
 
-            if (!file_exists($logDirectory)) {
-                mkdir($logDirectory, $this->defaultPermissions, true);
+        public function __destruct() {}
+
+        private function addHandlersFromConfig() {
+            $handlers = $this->config->sub('handlers');
+            //var_dump($handlers);
+            foreach ($handlers as $name => $config) {
+                $type = $config->get('type', null);
+                if ($type == "file") $mHandler = new FileLogHandler($this, $name, $config);
+                else {
+                    throw new RuntimeException("unknown log handler type {$type}");
+                }
+
+                $this->addHandler($mHandler);
             }
+        }
 
-            if ($logDirectory === "php://stdout" || $logDirectory === "php://output") {
-                $this->setLogToStdOut($logDirectory);
-                $this->setFileHandle('w+');
+        public function addHandler(LogHandlerInterface $handler) {
+            $this->handlers[$handler->getName()] = $handler; 
+        }
+
+        public function getHandler($name) {
+            return isset($this->handlers[$name]) ? $this->handlers[$name] : null;
+        }
+
+        public function setDateFormat($format) {
+            $this->config->set('date_format', $format);
+        }
+
+        public function getDateFormat() {
+            return $this->config->get('date_format', '');
+        }
+
+        public function setThreshold($threshold) {
+            $this->config->set('threshold', $threshold);
+        }
+
+        public function getThreshold() {
+            return $this->config->get('threshold', Logger::INFO);
+        }
+
+        public function log($handler = null, $level, $tag = null, $message) {
+            $message = $this->formatMessage($level, $tag, $message);
+
+            if ($handler) {
+                if (!isset($this->handlers[$handler])) return;
+                
+                $handler = $this->handlers[$handler];
+                if ($this->logLevels[$handler->getThreshold()] >= $this->logLevels[$level]) {
+                    $handler->log($message);
+                }
             } else {
-                $this->setLogFilePath($logDirectory);
-
-                if (file_exists($this->logFilePath) && !is_writable($this->logFilePath)) {
-                    throw new \RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
-                }
-
-                $this->setFileHandle('a');
-            }
-
-            if (!$this->fileHandle) {
-                throw new \RuntimeException('The file could not be opened. Check permissions.');
-            }
-        }
-
-        public function __destruct() {
-            if ($this->fileHandle) fclose($this->fileHandle);
-        }
-
-        public function setLogToStdOut($stdOutPath) {
-            $this->logFilePath = $stdOutPath;
-        }
-
-        public function setLogFilePath($logDirectory) {
-            if ($this->options['filename']) {
-                if (strpos($this->options['filename'], '.log') !== false || strpos($this->options['filename'], '.txt') !== false) {
-                    $this->logFilePath = $logDirectory . DIRECTORY_SEPARATOR . $this->options['filename'];
-                } else {
-                    $this->logFilePath = $logDirectory . DIRECTORY_SEPARATOR . $this->options['filename'] . $this->options['prefix'].date('Y-m-d') . '.' . $this->options['extension'];
-                }
-            } else {
-                $this->logFilePath = $logDirectory . DIRECTORY_SEPARATOR . $this->options['prefix'].date('Y-m-d') . '.' . $this->options['extension'];
-            }
-        }
-
-        public function setFileHandle($writeMode) {
-            $this->fileHandle = fopen($this->logFilePath, $writeMode);
-        }
-
-        public function setDateFormat($dateFormat) {
-            $this->options['dateFormat'] = $dateFormat;
-        }
-
-        public function setLogLevelThreshold($logLevelThreshold) {
-            $this->logLevelThreshold = $logLevelThreshold;
-        }
-
-        public function setTag($tag) {
-            $this->options['tag'] = $tag;
-        }
-
-        public function log($level, $tag = null, $message) {
-            if ($this->logLevels[$this->logLevelThreshold] < $this->logLevels[$level]) {
-               return;
-            }
-
-            $message = $this->formatMessage($level, $tag, $message);   
-            $this->write($message);
-        }
-
-        public function write($message) {
-            if (null !== $this->fileHandle) {
-                if (fwrite($this->fileHandle, $message) === false) {
-                    throw new \RuntimeException('The file could not be written to. Check that appropriate permissions have been set.');
-                } else {
-                    $this->lastLine = trim($message);
-                    $this->logLineCount++;
-
-                    if ($this->options['flushFrequency'] && $this->logLineCount % $this->options['flushFrequency'] === 0) {
-                        fflush($this->fileHandle);
-                    } elseif (!$this->options['flushFrequency']) { fflush($this->fileHandle); }
+                foreach ($this->handlers as $handler) {
+                    if ($handler->isRestricted()) continue;
+                    if ($this->logLevels[$handler->getThreshold()] >= $this->logLevels[$level]) {
+                        // todo sendAnyways
+                        $handler->log($message);    
+                    }
                 }
             }
         }
 
-        public function getLogFilePath() {
-            return $this->logFilePath;
-        }
-
-        public function getLastLogLine() {
-            return $this->lastLine;
+        public function getContext() {
+            return $this->context;
         }
 
         private function formatMessage($level, $tag = '', $message) {
             $level = strtoupper($level);
-            if (is_null($tag) && $this->options['tag']) {
+            /*if (is_null($tag) && $this->options['tag']) {
                 $tag = ':' . strtoupper($this->options['tag']);
-            } else $tag = ":{$tag}";
+            } else $tag = ":{$tag}";*/
 
+            $tag = is_null($tag) ? '' : ":{$tag}"; 
             return "[{$this->getTimestamp()}] [{$level}{$tag}] {$message}" . PHP_EOL;
         }
 
         private function getTimestamp() {
             $originalTime = microtime(true);
-
             $date = new \DateTime(date('Y-m-d H:i:s', $originalTime));
 
-            return $date->format($this->options['dateFormat']);
-        }
-
-        private function indent($string, $indent = '\t') {
-            return $indent . str_replace("\n", "\n".$indent, $string);
+            return $date->format($this->config->get('date_format'));
         }
     }
 
     class LoggingInterface {
-        public function emergency($message, $tag = null) {
-            $this->log(Logger::EMERGENCY, $tag, $message);
+        public function emergency($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::EMERGENCY, $tag, $message);
         }
 
-        public function alert($message, $tag = null) {
-            $this->log(Logger::ALERT, $tag, $message);
+        public function alert($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::ALERT, $tag, $message);
         }
         
-        public function critical($message, $tag = null) {
-            $this->log(Logger::CRITICAL, $tag, $message);
+        public function critical($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::CRITICAL, $tag, $message);
         }
 
-        public function error($message, $tag = null) {
-            $this->log(Logger::ERROR, $tag, $message);
+        public function error($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::ERROR, $tag, $message);
         }
         
-        public function warning($message, $tag = null) {
-            $this->log(Logger::WARNING, $tag, $message);
+        public function warning($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::WARNING, $tag, $message);
         }
         
-        public function notice($message, $tag = null) {
-            $this->log(Logger::NOTICE, $tag, $message);
+        public function notice($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::NOTICE, $tag, $message);
         }
         
-        public function info($message, $tag = null) {
-            $this->log(Logger::INFO, $tag, $message);
+        public function info($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::INFO, $tag, $message);
         }
        
-        public function debug($message, $tag = null) {
-            $this->log(Logger::DEBUG, $tag, $message);
+        public function debug($message, $handler = null, $tag = null) {
+            $this->log($handler, Logger::DEBUG, $tag, $message);
         }
     }

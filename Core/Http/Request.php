@@ -22,6 +22,9 @@
 		const REQUEST_TYPE_JSON = 1;
 		const REQUEST_TYPE_VIEW = 2;
 
+		const METHOD_GET = "GET";
+		const METHOD_POST = "POST";
+
 		public static function fromGlobals() {
 			$request = new Request($_GET, $_POST, $_COOKIE, $_SERVER, $_FILES);
 			return $request;
@@ -47,7 +50,7 @@
 			
 			if ($this->server->has('HTTP_X_REQUESTED_WITH') &&
 				strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
-				$this->type = Request::REQUEST_TYPE_JSON;
+				//$this->type = Request::REQUEST_TYPE_JSON;
 			}
 
 			if ($this->get('view_only', false)) {
