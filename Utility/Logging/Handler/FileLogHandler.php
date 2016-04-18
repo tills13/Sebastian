@@ -53,7 +53,7 @@
 
 		public function log($message) {
 			if (!fwrite($this->fileHandle, $message)) {
-				throw new RuntimeException("The file could not be written to. Check that appropriate permissions have been set.");
+				throw new RuntimeException("{$this->filePath} could not be written to. Check that appropriate permissions have been set.");
 			}
 		}
 

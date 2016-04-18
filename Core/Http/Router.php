@@ -6,6 +6,7 @@
 	use Sebastian\Application;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Core\Component\Component;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Entity\EntityInterface;
 	use Sebastian\Core\Exception\PageNotFoundException;
@@ -50,6 +51,10 @@
 			$this->em = $context->getEntityManager();
 			$this->cm = $context->getCacheManager();
 			$this->logger = $context->getLogger(self::$tag);
+		}
+
+		public function attachComponent(Component $component) {
+			$prefix = $component->getRoutePrefix();
 		}
 
 		/**
@@ -97,6 +102,42 @@
 				$count = count($routes);
 				$time = microtime(true) - $startTime;
 			}
+
+
+			/*foreach ($components as $component) {
+				$config = $component->getRoutingConfig();
+				//print ($config); die();
+
+				//if (!$config) continue;
+
+				$startTime = microtime(true);
+				$routes = Configuration::fromPath($config);
+
+				foreach ($routes as $name => $mRoute) {
+					if ($mRoute->has('type') || $mRoute->get('type') == 'group') {
+						$this->addRouteGroup($name, $mRoute);
+					} else {
+						// required fields
+						$route = $mRoute->get('route');
+						$controller = $mRoute->get('controller');
+						$method = $mRoute->get('method');
+
+						// optional
+						$methods = $mRoute->get('methods', ['GET', 'POST']);
+						$requirements = $mRoute->get('requirements', []);
+
+						$this->addRoute($name, $route, $controller, $method, $requirements, $methods);
+					}
+				}
+
+				var_dump($routes);die();
+			}*/
+
+
+
+
+			//die();
+
 		}
 
 		public function addRouteGroup($groupName, $group) {

@@ -4,16 +4,20 @@
 	use Sebastian\Application;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Core\Exception\SebastianException;
 
 	abstract class Component {
+		protected $application;
 		protected $name;
 		protected $config;
 		protected $requirements;
 		protected $weight;
 		protected $path;
 		protected $enabled;
+		protected $routePrefix;
 
-		public function __construct($name, Configuration $config = null) {
+		public function __construct(Application $application, $name, Configuration $config = null) {
+			$this->application = $application;
 			$this->name = $name;
 			$this->config = $config ?: new Configuration();
 
@@ -21,6 +25,7 @@
 			$this->weight = 0;
 			$this->path = "";
 			$this->enabled = true;
+			$this->routePrefix = null;
 		}
 
 		public function setEnabled($enabled) {
@@ -66,10 +71,26 @@
 		}
 
 		public function getResourceUri($uri) {
-
-
 			return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
 			//return $this->getNamespacePath() . DIRECTORY_SEPARATOR . "Resources" . DIRECTORY_SEPARATOR 
+		}
+
+		public function getRoutingConfig() {
+			$filename = implode(DIRECTORY_SEPARATOR, [\APP_ROOT, $this->application->getNamespace(), $this->getNamespacePath(), "routing.yaml"]);
+			if (file_exists($filename)) return $filename;
+
+			$filename1 = implode(DIRECTORY_SEPARATOR, [\APP_ROOT, $this->application->getNamespace(), $this->getNamespacePath(), "routing.yml"]);
+			if (file_exists($filename1)) return $filename1;
+
+			throw new SebastianException("routing file not found: {$filename} or {$filename1}");
+		}
+
+		public function setRoutePrefix($routePrefix) {
+			$this->routePrefix = $routePrefix;
+		}
+
+		public function getRoutePrefix() {
+			return $this->routePrefix;
 		}
 
 		public function setWeight($weight) {

@@ -10,6 +10,8 @@
 	 * @since  Oct. 2015
 	 */
 	class Request {
+		public $body;
+
 		protected $get;
 		protected $post;
 		protected $route;
@@ -31,6 +33,7 @@
 		}
 
 		protected function __construct($get = [], $post = [], $cookies = [], $server = [], $files = []) {
+			$this->body = file_get_contents('php://input');
 			$this->get = new Collection($get);
 			$this->post = new Collection($post);
 			$this->cookies = new Collection($cookies);
@@ -56,10 +59,22 @@
 			if ($this->get('view_only', false)) {
 				$this->type = Request::REQUEST_TYPE_VIEW;
 			}
+
+			$this->processBody();
 		}
 
 		public function get($keyword, $default = null) {
 			return $this->get->get($keyword, $this->post->get($keyword, $default));
+		}
+
+		protected function processBody() {
+			try {
+				if ($this->headers->get('HTTP_CONTENT_TYPE') == 'application/json') {
+					$this->body = new Collection(json_decode($this->body, true));
+				} 
+			} catch (\Exception $e) {
+				$this->body = [];
+			}
 		}
 
 		/**

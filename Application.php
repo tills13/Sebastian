@@ -87,7 +87,6 @@
                 }
                 
                 die();
-                //return new Response($e->getMessage());
             }
         }
 
