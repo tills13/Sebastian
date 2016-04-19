@@ -10,6 +10,7 @@
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Session\Session;
+    use Sebastian\Core\Templating\SRender;
 
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     use Sebastian\Utility\Logging\Logger;
@@ -33,6 +34,8 @@
         protected $services;
         protected $exceptionHandlers;
 
+        protected $extensions = [];
+
         public function __construct(Kernel $kernel, Configuration $config = null) {
             $this->kernel = $kernel;
             $this->config = $config;
@@ -48,13 +51,13 @@
             $this->session = Session::fromGlobals($this);
             $this->registerComponents();
 
-            //print (count($this->components) . " components loaded");
-            //print ("using " . $this->getComponent()->getName());
-            //$this->checkComponentRequirements();
-
             if (count($this->components) == 0) {
                 throw new SebastianException("At least one component must be registered");
             }
+
+            $this->extensions['templating'] = new SRender($this, null, array_map(function($component) {
+                return $component->getResourceUri('views', true);
+            }, $this->getComponents(true)));
 
             $this->router = Router::getRouter($this);
             $this->registerServices();
@@ -64,9 +67,7 @@
             try {
                 $resolved = $this->router->resolve($request);
 
-                $controllerClass = $resolved->get('controller');
-                $controller = new $controllerClass($this);
-
+                $controller = $resolved->get('controller');
                 $method = $resolved->get('method');
                 $arguments = $resolved->get('arguments');
 
@@ -138,6 +139,14 @@
             }
         }
 
+        public function get($extension) {
+            if (isset($this->extensions[$extension])) {
+                return $this->extensions[$extension];
+            }
+
+            throw new SebastianException('Extension {$extension} not found');
+        }
+
         public function getApplicationName() {
             return $this->config->get('application.name');
         }
@@ -153,7 +162,7 @@
 
                 return $component;
             } else {
-               $name = strtolower($name);
+                $name = strtolower($name);
                 return isset($this->components[$name]) ? $this->components[$name] : null; 
             }
         }
@@ -162,7 +171,13 @@
             return $this->cacheManager;
         }
 
-        public function getComponents() {
+        public function getComponents($sortByWeight = false) {
+            if ($sortByWeight) {
+                uasort($this->components, function($componentA, $componentB) {
+                    return $componentA->getWeight() > $componentB->getWeight();
+                });
+            }
+
             return $this->components;
         }
 

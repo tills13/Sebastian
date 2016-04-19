@@ -11,10 +11,12 @@
 	 */
 	class Utils {
 		public static function startsWith($haystack, $needle) {
+			if ($needle == null) return false;
 		    return $needle === "" || strrpos($haystack, $needle, -strlen($haystack)) !== false;
 		}
 
-		public static function endsWith($haystack, $needle) {
+		public static function endsWith($haystack, $needle = null) {
+			if ($needle == null) return false;
 		    return $needle === "" || (($temp = strlen($haystack) - strlen($needle)) >= 0 && strpos($haystack, $needle, $temp) !== false);
 		}
 

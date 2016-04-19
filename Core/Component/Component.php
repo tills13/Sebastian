@@ -2,9 +2,10 @@
 	namespace Sebastian\Core\Component;
 
 	use Sebastian\Application;
+	use Sebastian\Core\Exception\SebastianException;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
-	use Sebastian\Core\Exception\SebastianException;
+	use Sebastian\Utility\Utility\Utils;
 
 	abstract class Component {
 		protected $application;
@@ -70,8 +71,27 @@
 			return ($this->requirements != null && $this->requirements->count() != 0);
 		}
 
-		public function getResourceUri($uri) {
-			return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
+		public function hasController($controller = null) {
+			if (!Utils::endsWith($controller, 'Controller')) $controller = $controller . "Controller";
+			if (!Utils::endsWith($controller, '.php')) $controller = $controller . ".php";
+
+			$path = implode(DIRECTORY_SEPARATOR, [\APP_ROOT, $this->application->getNamespace(), $this->getNamespacePath(), "Controller", $controller]);
+			return file_exists($path);
+		}
+
+		public function getController($controller) {
+			if (!Utils::endsWith($controller, 'Controller')) $controller = $controller . "Controller";
+
+			return implode('\\', [$this->application->getNamespace(), $this->getNamespacePath(), "Controller", $controller]);
+		}
+
+		public function getResourceUri($uri, $absolute = false) {
+			if ($absolute) {
+				return implode(DIRECTORY_SEPARATOR, [\APP_ROOT, $this->application->getNamespace(), $this->getNamespacePath(), "Resources", $uri]);
+			} else {
+				return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
+			}
+			
 			//return $this->getNamespacePath() . DIRECTORY_SEPARATOR . "Resources" . DIRECTORY_SEPARATOR 
 		}
 
@@ -103,6 +123,10 @@
 
 		public function getNamespacePath() {
 			return str_replace('/', '\\', $this->path);
+		}
+
+		public function __toString() {
+			return $this->name;
 		}
 
 		abstract public function checkRequirements(Application $context);

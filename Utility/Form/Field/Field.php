@@ -23,6 +23,7 @@
 
 		protected $form;
 		protected $name;
+		protected $id;
 		protected $value;
 		protected $validated;
 
@@ -34,6 +35,7 @@
 		public function __construct(Form $form, $name, $attributes = []) {
 			$this->form = $form;
 			$this->name = $name;
+			//$this->id = $id;
 			$this->validated = false;
 
 			$this->attributes = new Configuration($attributes);
@@ -59,6 +61,22 @@
 			return implode(" ", $attributes);
 		}
 
+		public function getForm() {
+			return $this->form;
+		}
+
+		public function getFullName() {
+			return "{$this->getForm()->getName()}[{$this->getName()}]";
+		}
+
+		public function setId($id) {
+			$this->id = $this->attributes->get('id');//$id;
+		}
+
+		public function getId() {
+			return $this->attributes->get('id', null);
+		}
+
 		public function setName($name = null) {
 			if (!$name || $name == '') throw new \Exception("name cannot be blank", 1);
 			
@@ -70,12 +88,8 @@
 			return $this->name;
 		}
 
-		public function getForm() {
-			return $this->form;
-		}
-
-		public function getFullName() {
-			return "{$this->getForm()->getName()}[{$this->getName()}]";
+		public function getTag() {
+			return $this->tag;
 		}
 
 		public function getType() {
@@ -90,9 +104,6 @@
 			return $this->value;
 		}
 
-		public function getTag() {
-			return $this->tag;
-		}
 
 		public function validate() {
 			$this->validated = true;

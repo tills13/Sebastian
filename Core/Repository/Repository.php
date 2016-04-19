@@ -256,22 +256,30 @@
 				throw new SebastianException("One of [{$keys}] must be provided for entity {$this->entity}", 500);
 			}
 
+
+
+			//var_dump($params);
+
 			// check temp cache
 			$skeleton = $this->initializeObject($params);
+			foreach ($this->keys as $key) {
+				if ($this->getFieldValue($skeleton, $this->columnMap[$key]) == null) return null;
+			}
+
 			$orcKey = $this->orc->generateKey($skeleton);
 
-			/*if ($this->orc->isCached($orcKey)) {
+			if ($this->orc->isCached($orcKey)) {
 				$this->logger->info("hit _orc with {$orcKey}", "repo_log");
 				return $this->orc->load($orcKey);
 			} else {
 				$this->orc->cache($orcKey, $skeleton);
-			}*/
+			}
 
 			// then check long term cache
-			/*$cmKey = $this->cm->generateKey($skeleton);
+			$cmKey = $this->cm->generateKey($skeleton);
 			if ($this->cm->isCached($cmKey)) {
 				return $this->cm->load($cmKey);
-			}*/
+			}
 
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
 
@@ -387,11 +395,12 @@
 					$skeleton = $this->build($skeleton, [$key => $values]);
 				}
 			} else {
+				$this->orc->invalidate($orcKey); // get rid of the reference
 				return null;
 			}
 			
-			//$this->orc->cache($orcKey, $skeleton);
-			//$this->cm->cache(null, $skeleton);
+			$this->orc->cache($orcKey, $skeleton);
+			$this->cm->cache(null, $skeleton);
 
 			return clone $skeleton; // necessary to "sever" the object from the reference cache
 		}

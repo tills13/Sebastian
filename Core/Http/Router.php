@@ -4,14 +4,16 @@
 	use Sebastian\SEBASTIAN_ROOT;
 
 	use Sebastian\Application;
-	use Sebastian\Utility\Collection\Collection;
-	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Core\Component\Component;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Entity\EntityInterface;
 	use Sebastian\Core\Exception\PageNotFoundException;
+	use Sebastian\Core\Exception\SebastianException;
 	use Sebastian\Core\Http\Request;
 	use Sebastian\Core\Session\Session;
+	use Sebastian\Utility\Collection\Collection;
+	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Utility\Utility\Utils;
 	
 	/**
 	 * Router
@@ -50,7 +52,7 @@
 
 			$this->em = $context->getEntityManager();
 			$this->cm = $context->getCacheManager();
-			$this->logger = $context->getLogger(self::$tag);
+			$this->logger = $context->getLogger();
 		}
 
 		public function attachComponent(Component $component) {
@@ -66,7 +68,7 @@
 			$namespace = $this->getContext()->getNamespace();
 
 			$paths = [
-				"../config/routing.yaml", // master routing file, if required
+				\APP_ROOT . DIRECTORY_SEPARATOR . "../config/routing.yaml", // master routing file, if required
 				SEBASTIAN_ROOT . "/Core/Resources/config/routing.yaml" // internal for css/js/font/assets
 			]; // add default routes
 
@@ -137,7 +139,6 @@
 
 
 			//die();
-
 		}
 
 		public function addRouteGroup($groupName, $group) {
@@ -227,30 +228,30 @@
 				if (count($matches) > 0) {
 					$namespace = $this->getContext()->getNamespace();
 
+					$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
+
+					$controller = null;
 					if ($route->has('component')) {
 						$component = $this->getContext()->getComponent($route->get('component'));
 						if (!$component) continue;
 
-						$path = str_replace('/', '\\', $component->getPath());
-						$controller = "\\{$namespace}{$path}\\Controller\\".$route['controller'];	
-						$path = \APP_ROOT . '/'.str_replace('\\', '/', $controller) . '.php';
-
-						if (!file_exists($path)) continue;
+						if ($component->hasController($route['controller'])) {
+							$controller = $component->getController($route['controller']);
+							$controller = new $controller($this->getContext(), $component);
+						} else continue;
 					} else {
 						foreach ($components as $component) {
-							$path = str_replace('/', '\\', $component->getPath());
-							$controller = "\\{$namespace}{$path}\\Controller\\".$route['controller'];	
-							$path = \APP_ROOT . '/'.str_replace('\\', '/', $controller) . '.php';
-
-							if (file_exists($path)) break;
+							if ($component->hasController($route['controller'])) {
+								$controller = $component->getController($route['controller']);
+								$controller = new $controller($this->getContext(), $component);
+							} else continue;
 						}
+
+						if (!$controller) continue;
 					}
 
-					/*try {
+					$this->logger->info("using controller $controller");
 
-					} catch (ReflectionException $e) {
-
-					}*/
 					$method = $route->get('method') . 'Action';
 					$reflection = new \ReflectionMethod($controller, $method);
 
@@ -311,7 +312,30 @@
 			return $this->routes;
 		}
 
+		public function getRoute($name) {
+			return $this->routes->get($name, null);
+		}
+
 		public function getContext() {
 			return $this->context;
+		}
+
+		public function generateUrl($name, $args = []) {
+			$route = $this->getRoute($name);
+			if (!$this->getRoute($name)) throw new SebastianException("Route {$name} does not exist.");
+			
+			$mRoute = $route['route'];
+
+			foreach ($args as $key => $arg) {
+				$match = preg_match("/{($key(?:\:[^\}]*)?)}/", $mRoute);
+
+				if ($match != 0) {
+					$mRoute = preg_replace("/{($key(?:\:[^\}]*)?)}/", $arg, $mRoute);
+					unset($args[$key]);
+				}
+			}
+
+			if (count($args) > 0) $mRoute .= "?" . http_build_query($args);
+			return $mRoute;
 		}
 	}
