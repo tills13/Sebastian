@@ -70,8 +70,13 @@
 			return ($this->requirements != null && $this->requirements->count() != 0);
 		}
 
-		public function getResourceUri($uri) {
-			return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
+		public function getResourceUri($uri, $absolute = false) {
+			if ($absolute) {
+				return implode(DIRECTORY_SEPARATOR, [\APP_ROOT, $this->application->getNamespace(), $this->getNamespacePath(), "Resources", $uri]);
+			} else {
+				return implode(DIRECTORY_SEPARATOR, [$this->getNamespacePath(), "Resources", $uri]);
+			}
+			
 			//return $this->getNamespacePath() . DIRECTORY_SEPARATOR . "Resources" . DIRECTORY_SEPARATOR 
 		}
 

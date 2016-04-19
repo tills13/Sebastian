@@ -11,6 +11,7 @@
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Session\Session;
+    use Sebastian\Core\Templating\SRender;
 
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     use Sebastian\Utility\Logging\Logger;
@@ -33,6 +34,8 @@
         protected $services;
         protected $exceptionHandlers;
 
+        protected $extensions = [];
+
         public function __construct(Kernel $kernel, $config) {
             $this->kernel = $kernel;
             $this->config = $config;
@@ -47,6 +50,10 @@
 
             $this->session = Session::fromGlobals($this);
             $this->registerComponents();
+
+            $this->extensions['templating'] = new SRender($this, null, array_map(function($component) {
+                return $component->getResourceUri('views', true);
+            }, $this->getComponents()));
 
             //print (count($this->components) . " components loaded");
             //print ("using " . $this->getComponent()->getName());
@@ -136,6 +143,14 @@
                 $service->boot();
                 $this->services[$key] = $service;
             }
+        }
+
+        public function get($extension) {
+            if (isset($this->extensions[$extension])) {
+                return $this->extensions[$extension];
+            }
+
+            throw new SebastianException('Extension {$extension} not found');
         }
 
         public function getApplicationName() {

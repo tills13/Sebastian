@@ -33,12 +33,19 @@
 			$this->context = $context;
 
 			$this->masterLayout = "master";
-			$this->headers = [];
 			$this->cssFiles = [];
 			$this->jsFiles = [];
+
+			$this->render = $this->context->get('templating');
 		}
 
-		public function render($path = false, $data = []) {
+		public function render($template, $data = []) {
+			$response = new Response();
+			$response->setContent($this->render->render($template, $data));
+			return $response;
+		}
+
+		/*public function render($path = false, $data = []) {
 			ob_start();
 			
 			if ($this->getRequest()->getType() == Request::REQUEST_TYPE_DEFAULT) { // everything
@@ -59,7 +66,7 @@
 			$response->setContent($responseBody);
 
 			return $response;
-		}
+		}*/
 
 		public function renderView($path = false, $data = []) {
 			foreach ($data as $key => $value) $$key = $value;
