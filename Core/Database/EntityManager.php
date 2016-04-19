@@ -108,7 +108,8 @@
                     }, $this->getNonForeignColumns($join['entity']));
                 } else {
                     if ($join['type'] == Repository::JOIN_TYPE_FK) {
-                        //$mJoin = $join['join'];
+                        $key = "{$join['field']}_{$join['table']}";
+                        $column = $join['foreign'];
                     } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
                         $mJoin = $join['join'];
                         $column = explode(':', $mJoin['joinColumnForeign'])[1];
@@ -179,7 +180,6 @@
             $manyRelation = $this->getMultiMappedFields($class);
 
             foreach ($manyRelation as $field => $many) {
-                //print_r($field); die();
                 $mJoin = [];
 
                 if (array_key_exists('entity', $many)) $mJoin['entity'] = $many['entity'];
@@ -194,14 +194,14 @@
                     $mJoin['type'] = Repository::JOIN_TYPE_JOIN_TABLE;
                     $mJoin['join'] = $many['join'];
 
-
                     $mColumns = explode(':', $mJoin['join']['joinColumnLocal']);
                     $mJoin['column'] = $field;
                 } else {
                     $mJoin['type'] = Repository::JOIN_TYPE_FK;
                     $mJoin['table'] = isset($mJoin['table']) ? $mJoin['table'] : $this->getTable($mJoin['entity']);
-                    $mJoin['column'] = $many['with'];
-                    $mJoin['foreign'] = $column;
+                    $mJoin['column'] = $many['local'];
+                    $mJoin['foreign'] = $many['foreign'];
+                    $mJoin['field'] = $many['field'];
                 }
 
                 $joins[] = $mJoin;
@@ -259,19 +259,21 @@
                 if ($join['type'] == Repository::JOIN_TYPE_FK) {
                     $table = $join['table'];
                     $alias = substr($table, 0, 1);
-                    $column = $join['column'];
+                    
+                    if (array_key_exists('entity', $join)) $local = $join['column'];
+                    else $local = $join['field'];
                 } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
                     $mJoin = $join['join'];
                     $table = $mJoin['joinTableLocal'];
                     $alias = substr($table, 0, 1);
-                    $column = $mJoin['joinColumnLocal'];
+                    $local = $mJoin['joinColumnLocal'];
 
                     $index = 0;
                     while (in_array($alias, $mTables)) $alias = $alias . $index;
 
-                    $mTables["{$column}_{$table}"] = $alias;
+                    $mTables["{$local}_{$table}"] = $alias;
 
-                    $column = $mJoin['joinColumnForeign'];
+                    $local = $mJoin['joinColumnForeign'];
                     $table = $mJoin['joinTableForeign'];
                     $alias = substr($table, 0, 1);
                 }
@@ -281,7 +283,7 @@
                     $alias = $alias . $index;
                 }
 
-                $mTables["{$column}_{$table}"] = $alias;
+                $mTables["{$local}_{$table}"] = $alias;
             }
 
             return $mTables;
@@ -358,7 +360,7 @@
                 );
             }); 
 
-            return array_map(function($field) {
+            return array_map(function($key, $field) {
                 if (array_key_exists('entity', $field)) {
                     $mField = [ 'entity' => $field['entity'] ];    
                 } else {
@@ -376,14 +378,19 @@
                     $mField['join'] = $field['join'];
                 } else {
                     $mField['type'] = Repository::JOIN_TYPE_FK;
-                    $mField['mapped'] = $field['mapped'];
-                    $mField['with'] = $field['with'];
+                    $mField['local'] = $field['local'];
+                    $mField['foreign'] = $field['foreign'];
+                    $mField['field'] = $key;
                 }
 
                 return $mField;
-            }, $fields);
+            }, array_keys($fields), $fields);
         }
 
+        /**
+         * @todo split entities and repos
+         * @return [type]
+         */
         public function getNamespacePath($class) {
             if ($this->repositories->has($class)) {
                 // todo shrink
@@ -407,7 +414,7 @@
             }
 
             $columnDefinitions = array_filter($this->definitions[$entity]['fields'], function($entity) {
-                return !isset($entity['relation']) && !isset($entity['with']);
+                return !isset($entity['relation']) && !isset($entity['foreign']);
             }); 
 
             return array_values(array_map(function($column) {
@@ -453,7 +460,7 @@
                     $mColumns = explode(':', $mColumns);
                     $mColumn['column'] = $mColumns[0];
                 } else {
-                    $mColumn['foreign'] = $column['with'];
+                    $mColumn['foreign'] = $column['foreign'];
                     $mColumn['column'] = $column['column'];
                 }
                 

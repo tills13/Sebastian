@@ -117,15 +117,30 @@
 		}
 
 		public function innerJoin($table, $on = null) {
-			$this->join(Join::TYPE_INNER, $table, $on);
+			return $this->join(Join::TYPE_INNER, $table, $on);
 		}
 
 		public function leftJoin($table, $on = null) {
-			$this->join(Join::TYPE_LEFT, $table, $on);
+			return $this->join(Join::TYPE_LEFT, $table, $on);
 		}
 
 		public function rightJoin($table, $on = null) {
-			$this->join(Join::TYPE_RIGHT, $table, $on);
+			return $this->join(Join::TYPE_RIGHT, $table, $on);
+		}
+
+		public function limit($limit = 'All') {
+			$this->query->setLimit($limit);
+			return $this;
+		}
+
+		public function offset($offset = 0) {
+			$this->query->setOffset($offset);
+			return $this;
+		}
+
+		public function orderBy($column, $direction) {
+			$this->query->addOrderBy($column, $direction);
+			return $this;
 		}
 
 		/**

@@ -18,6 +18,7 @@
 		protected $where;
 		protected $limit;
 		protected $offset;
+		protected $orderBy;
 		protected $into;
 
 		protected $binds;
@@ -33,6 +34,7 @@
 			$this->where = null;
 			$this->limit = null;
 			$this->offset = 0; 
+			$this->orderBy = new Collection();
 		}
 
 		public function addBind($key, $value) {
@@ -81,7 +83,7 @@
 			$this->joins->set(null, $join);
 		}
 
-		public function setLimit(int $limit) {
+		public function setLimit($limit) {
 			$this->limit = $limit;
 			return $this;
 		}
@@ -90,13 +92,25 @@
 			return $this->limit;
 		}
 
-		public function setOffset(int $offset) {
+		public function setOffset($offset) {
 			$this->offset = $offset;
 			return $this;
 		}
 
 		public function getOffset() {
 			return $this->offset;
+		}
+
+		public function addOrderBy($column, $direction) {
+			$this->orderBy->set($column, $direction);
+		}
+
+		public function setOrderBy($column, $direction) {
+			$this->orderBy = new Collection([$column => $direction]);
+		}
+
+		public function getOrderBy() {
+			return $this->orderBy;
 		}
 
 		public function setWhere($expression) {
@@ -126,9 +140,25 @@
 			}
 
 			if ($this->where !== null) {
-				$query .= "WHERE " . $this->where . "\n";	
+				$query .= "WHERE " . $this->where . "\n";
 			}
 
+			$orderBy = $this->getOrderBy();
+			if ($orderBy && $orderBy->count() != 0) {
+				$query = $query . "ORDER BY ";
+
+				$index = 0;
+				foreach ($orderBy as $column => $direction) {
+					$direction = strtoupper($direction);
+					$query = $query . "{$column} {$direction}";
+					if (++$index != $orderBy->count()) $query = $query . ",";
+					else $query = $query . "\n";
+				}
+			}
+
+			if ($this->limit) $query .= "LIMIT {$this->limit}\n";
+			if ($this->offset) $query .= "OFFSET {$this->offset}\n";
+			
 			return $query;
 		}
 

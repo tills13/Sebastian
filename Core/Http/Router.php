@@ -40,8 +40,7 @@
 		public static function getRouter(Application $context) {
 			if (self::$router == null) {
 				self::$router = new Router($context);
-				self::$router->loadRoutes();
-			}				
+			}		
 
 			return self::$router;
 		}

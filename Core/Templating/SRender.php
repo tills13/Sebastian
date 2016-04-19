@@ -25,6 +25,12 @@
 			$this->blockContext = [];
 		}
 
+		public function addTemplateDirectories(array $directories = []) {
+			foreach ($directories as $directory) {
+				$this->addTemplateDirectory($directory);
+			}
+		}
+
 		public function addTemplateDirectory($directory = null) {
 			if (!$directory) return false;
 			if (!file_exists($directory)) throw new TemplateException("Template directory {$directory} does not exist");

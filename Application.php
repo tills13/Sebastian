@@ -39,9 +39,10 @@
         public function __construct(Kernel $kernel, Configuration $config = null) {
             $this->kernel = $kernel;
             $this->config = $config;
-            $this->exceptionHandlers = [];
 
             $this->components = [];
+            $this->extensions = [];
+            $this->exceptionHandlers = [];
             
             $this->logger = new Logger($this, $config->sub('logging'));
             $this->cacheManager = new CacheManager($this, $config->sub('cache'));
@@ -49,17 +50,17 @@
             $this->entityManager = new EntityManager($this, $config->sub('entity'));
 
             $this->session = Session::fromGlobals($this);
-            $this->registerComponents();
+            $this->router = Router::getRouter($this);
+        }
 
-            if (count($this->components) == 0) {
-                throw new SebastianException("At least one component must be registered");
-            }
+        public function preHandle() {
+            $this->checkComponentRequirements();
+            $this->router->loadRoutes();
 
             $this->extensions['templating'] = new SRender($this, null, array_map(function($component) {
                 return $component->getResourceUri('views', true);
             }, $this->getComponents(true)));
 
-            $this->router = Router::getRouter($this);
             $this->registerServices();
         }
 
@@ -99,21 +100,22 @@
             $this->exceptionHandlers[] = $handler;
         }
 
-        public function registerComponents() {
-            // todo
+        public function registerComponents(array $components) {
+            foreach ($components as $component) {
+                if (!$component instanceof Component) throw new SebastianException("component must extend Sebastian\Component");
+                $this->registerComponent($component);
+            }
         }
 
         public function checkComponentRequirements() {
-            foreach ($this->components as $component) {
-                if (!$component->hasRequirements()) continue;
-                if (!$component->checkRequirements($this)) $component->setEnabled(false);
-            }
+            $context = $this;
+            $this->components = array_filter($this->getComponents(true), function($component) use ($context) {
+                return $component->checkRequirements($context);
+            });
         }
 
         public function registerComponent(Component $component) {
-            if ($component->checkRequirements($this)) {
-                $this->components[strtolower($component->getName())] = $component;
-            }
+            $this->components[strtolower($component->getName())] = $component;
         }
 
         public function registerServices() {
@@ -144,7 +146,7 @@
                 return $this->extensions[$extension];
             }
 
-            throw new SebastianException('Extension {$extension} not found');
+            throw new SebastianException("Extension {$extension} not found");
         }
 
         public function getApplicationName() {
@@ -171,6 +173,9 @@
             return $this->cacheManager;
         }
 
+        /**
+         * @todo standardize weights - higher > lower or lower > higher?
+         */
         public function getComponents($sortByWeight = false) {
             if ($sortByWeight) {
                 uasort($this->components, function($componentA, $componentB) {

@@ -41,12 +41,14 @@
                 $applicationPath = "\\{$namespace}\\{$appClass}";
 
                 $this->application = new $applicationPath($this, $this->config);
+
             } else {
                 $this->application = new Application($this, $this->config);
             }
         }
 
         public function run($params = null) {
+            $this->application->preHandle();
             return $this->application->handle($this->request);
         }
 
@@ -54,11 +56,15 @@
             $this->application->shutdown($this->request, $response);
         }
 
-        public function getRequest() {
-            return $this->request;
+        public function getComponents() {
+
         }
 
         public function getEnvironment() {
             return $this->env;
+        }
+
+        public function getRequest() {
+            return $this->request;
         }
     }
