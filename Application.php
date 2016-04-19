@@ -3,7 +3,6 @@
 
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
-    use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Exception\SebastianException;
@@ -15,6 +14,7 @@
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     use Sebastian\Utility\Logging\Logger;
     use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Utility\Configuration\Configuration;
 
     /**
      * Application
@@ -33,7 +33,7 @@
         protected $services;
         protected $exceptionHandlers;
 
-        public function __construct(Kernel $kernel, $config) {
+        public function __construct(Kernel $kernel, Configuration $config = null) {
             $this->kernel = $kernel;
             $this->config = $config;
             $this->exceptionHandlers = [];
