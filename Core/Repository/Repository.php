@@ -142,7 +142,7 @@
 
 			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
 
-			foreach ($this->joins as $key => $join) {
+			/*foreach ($this->joins as $key => $join) {
 				$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
 				$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
 
@@ -150,7 +150,7 @@
 					->equals("{$foreignTableAlias}.{$join['foreign']}")->getExpression();
 
 				$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
-			}
+			}*/
 
 			$expression = null;
 			foreach ($where as $with => $param) {
@@ -207,8 +207,7 @@
 				$skeleton = $this->build(null, $mResult);
 
 				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
-					$repo = $this->em->getRepository($mapped['entity']);
-					//$this->logger->info("{$this->entity} repo {$mapped['entity']}");
+					$repo = $this->em->getRepository($mapped['targetEntity']);
 
 					$params = [];
 					foreach ($mResult as $key => $value) {
@@ -224,7 +223,7 @@
 				}
 
 				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
-					$repo = $this->em->getRepository($field['entity']);
+					$repo = $this->em->getRepository($field['targetEntity']);
 
 					$foreign = $mResult[$field['local']];
 					$entities = $repo->find([$field['foreign'] => $foreign]);
@@ -235,10 +234,6 @@
 			}
 
 			return $mSkeletons;
-		}
-
-		public function findOne($where = []) {
-			
 		}
 
 		/**
@@ -287,12 +282,21 @@
 				return $this->cm->load($cmKey);
 			}
 
-			$qf = $qf->select($this->columns)->from([$this->aliases[$this->entity] => $this->getTable()]);
+			$qf = $qf->select($this->columns)
+					 ->from([$this->aliases[$this->entity] => $this->getTable()]);
 
-			foreach ($this->joins as $key => $join) {
+
+
+
+			//header("Content-Type: application/json");
+			//print (json_encode($this->joins));
+			//die();
+
+			/*foreach ($this->joins as $key => $join) {
 				if ($join['type'] == Repository::JOIN_TYPE_FK) {
 					$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
-					if (array_key_exists('entity', $join)) {
+					if (array_key_exists('targetEntity
+						', $join)) {
 						$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
 					} else {
 						$foreignTableAlias = $this->aliases["{$join['field']}_{$join['table']}"];
@@ -324,21 +328,20 @@
 						$qf = $qf->join(Join::TYPE_LEFT, [$tableAlias => $mTable], $expression);
 					}
 				}
-			}
+			}*/
 
+			// build where
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
 			foreach ($this->keys as $name => $key) {
 				$fieldName = $this->columnMap->get($key);
 				$value = $this->getFieldValue($skeleton, $fieldName);
-				if ($value != null) {
-						//throw new SebastianException("Primary Key {$key} cannot be null/blank");
 
+				if ($value != null) {
 					$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
 						->equals(":$fieldName"); // generates the individual expression
 
 					$qf->bind($fieldName, $value);
-
 					$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
 				} else {
 					throw new SebastianException("Primary Key {$key} cannot be null/blank");
@@ -347,16 +350,18 @@
 
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
+			print($query); die();
 
 			$statement = $this->connection->execute($query, $query->getBinds());
 			$results = $statement->fetchAll();
 
 			if ($results) {
 				$skeleton = $this->build($skeleton, $results[0]);
+				var_dump($skeleton); die();
 
-				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $key => $mapped) {
-					if (array_key_exists('entity', $mapped)) {
-						$repo = $this->em->getRepository($mapped['entity']);	
+				/*foreach ($this->em->getOneToOneMappedColumns($this->entity) as $key => $mapped) {
+					if (array_key_exists('targetEntity', $mapped)) {
+						$repo = $this->em->getRepository($mapped['targetEntity']);	
 
 						$row = $results[0];
 						$objectParams = [];
@@ -381,15 +386,16 @@
 					
 					$skeleton = $this->build($skeleton, [$mapped['column'] => $value]);
 				}
-				//print ("here");
+
 				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
-					if (array_key_exists('join', $field)) {
+					//if (array)
+					/*if (array_key_exists('join', $field)) {
 
 					}
 
 
-					if (array_key_exists('entity', $field)) {
-						$repo = $this->em->getRepository($field['entity']);
+					if (array_key_exists('targetEntity', $field)) {
+						$repo = $this->em->getRepository($field['targetEntity']);
 					
 						if (array_key_exists('join', $field)) { // join table
 							foreach ($results as $row) {
@@ -414,14 +420,14 @@
 						}
 					}
 					
-					$skeleton = $this->build($skeleton, [$key => $values]);
-				}
-				//die();
+					$skeleton = $this->build($skeleton, [$key => $values]);*/
+				//}
 			} else {
 				$this->orc->invalidate($orcKey); // get rid of the reference
 				return null;
 			}
 			
+			// persist it
 			$this->orc->cache($orcKey, $skeleton);
 			$this->cm->cache(null, $skeleton);
 
@@ -474,7 +480,7 @@
 					$fObject = $this->getFieldValue($object, $fieldName);
 
 					if ($fObject != null) {
-						$fRepo = $this->em->getRepository($foreign['entity']);
+						$fRepo = $this->em->getRepository($foreign['targetEntity']);
 						$fFieldName = $fRepo->getColumnMap()->get($foreign['foreign']);
 
 						$value = $fRepo->getFieldValue($fObject, $fFieldName);

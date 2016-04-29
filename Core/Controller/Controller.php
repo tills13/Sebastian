@@ -38,16 +38,16 @@
 			$this->context = $context;
 			$this->component = $component;
 
-			$this->masterLayout = "master";
 			$this->cssFiles = [];
 			$this->jsFiles = [];
 
-			$this->render = $this->context->get('templating');
+			$this->renderer = $this->context->get('templating');
 		}
 
 		public function render($template, $data = []) {
 			$response = new Response();
-			$response->setContent($this->render->render($template, $data));
+			$response->setContent($this->renderer->render($template, $data));
+			$response->sendHttpResponseCode(Response::HTTP_OK);
 			return $response;
 		}
 
