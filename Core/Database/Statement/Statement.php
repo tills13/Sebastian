@@ -17,7 +17,7 @@
 			$this->logger = $pdo->getLogger();
 		}
 
-		public function execute(array $params = []) {
+		public function execute($params = []) {
 			$startTime = microtime(true);
 			try { parent::execute($params); } catch (PDOException $e) {
 				$this->logger->info("query failed", "db_log");
@@ -32,8 +32,7 @@
 			//if (is_string($column)) $column = 
 		}
 
-		public function fetchAll() {
-			$results = parent::fetchAll(PDO::FETCH_ASSOC);
-			return $results;
+		public function fetchAll($fetchStyle = PDO::FETCH_ASSOC, $className = null, $ctorArgs = null) {
+			return parent::fetchAll($fetchStyle);
 		}
 	}

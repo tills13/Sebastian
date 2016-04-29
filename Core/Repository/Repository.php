@@ -283,54 +283,36 @@
 			}
 
 			$qf = $qf->select($this->columns)
-					 ->from([$this->aliases[$this->entity] => $this->getTable()]);
+					 ->from([$this->aliases[0] => $this->getTable()]);
 
+			foreach ($this->joins as $field => $join) {
+				$fieldConfig = $this->fields->sub($field);
 
+				if ($fieldConfig->has('targetEntity')) {
+					$target = $fieldConfig->get('targetEntity');
+					$mEntityConfig = $this->em->getDefinition($target);
+					$table = $mEntityConfig->get('table');
 
+					$foreignColumn = $join->get(
+						'foreignColumn', 
+						$this->em->mapFieldToColumn($target, $join->get('foreign'))
+					);
+				} else {
+					$table = $join->get('table');
+					$foreignColumn = $join->get('foreignColumn');
+				}
 
-			//header("Content-Type: application/json");
-			//print (json_encode($this->joins));
-			//die();
+				$localColumn = $this->em->mapFieldToColumn($this->entity, $join->get('local'));
+				$withEntityKey = "{$this->aliases[0]}.{$localColumn}";
 
-			/*foreach ($this->joins as $key => $join) {
-				if ($join['type'] == Repository::JOIN_TYPE_FK) {
-					$withEntityKey = "{$this->aliases[$this->entity]}.{$join['column']}";
-					if (array_key_exists('targetEntity
-						', $join)) {
-						$foreignTableAlias = $this->aliases["{$join['column']}_{$join['table']}"];
-					} else {
-						$foreignTableAlias = $this->aliases["{$join['field']}_{$join['table']}"];
-					}
-					
-					$expression = $ef->reset()->expr($withEntityKey)
-						->equals("{$foreignTableAlias}.{$join['foreign']}")
+				$alias = $this->aliases[$field];
+				$expression = $ef->reset()->expr($withEntityKey)
+						->equals("{$alias}.{$foreignColumn}")
 						->getExpression();
 
-					$qf = $qf->join(Join::TYPE_LEFT, [$foreignTableAlias => $join['table']], $expression);
-				} else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
-					foreach (['Local', 'Foreign'] as $type) {
-						$mJoin = $join['join'];
-						$mColumn = $mJoin["joinColumn{$type}"];
-						$mTable = $mJoin["joinTable{$type}"];
-						$tableAlias = $this->aliases["{$mColumn}_{$mTable}"];
+				$qf = $qf->join(Join::TYPE_LEFT, [$alias => $table], $expression);
+			}
 
-						$columns = explode(':', $mColumn);
-						if ($type == 'Local') $withEntityKey = "{$this->aliases[$this->entity]}.{$columns[0]}";
-						else {
-							$columnAlias = "{$mJoin['joinColumnLocal']}_{$mJoin['joinTableLocal']}";
-							$withEntityKey = "{$this->aliases[$columnAlias]}.{$columns[0]}";
-						}
-
-						$expression = $ef->reset()->expr($withEntityKey)
-							->equals("{$tableAlias}.{$columns[1]}")
-							->getExpression();
-
-						$qf = $qf->join(Join::TYPE_LEFT, [$tableAlias => $mTable], $expression);
-					}
-				}
-			}*/
-
-			// build where
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
 			foreach ($this->keys as $name => $key) {
@@ -338,7 +320,7 @@
 				$value = $this->getFieldValue($skeleton, $fieldName);
 
 				if ($value != null) {
-					$mExFactory->reset()->expr("{$this->aliases[$this->entity]}.{$key}")
+					$mExFactory->reset()->expr("{$this->aliases[0]}.{$key}")
 						->equals(":$fieldName"); // generates the individual expression
 
 					$qf->bind($fieldName, $value);
@@ -350,12 +332,23 @@
 
 			$qf = $qf->where($ef->getExpression());
 			$query = $qf->getQuery();
-			print($query); die();
 
 			$statement = $this->connection->execute($query, $query->getBinds());
 			$results = $statement->fetchAll();
 
 			if ($results) {
+				$mResults = [];
+
+				header("Content-Type: application/json");
+				print (json_encode($results)); die();
+
+				foreach ($this->fields as $name => $value) {
+					
+				}
+
+
+
+				$results = $this->processResults($results);
 				$skeleton = $this->build($skeleton, $results[0]);
 				var_dump($skeleton); die();
 
@@ -433,6 +426,8 @@
 
 			return clone $skeleton; // necessary to "sever" the object from the reference cache
 		}
+
+		//public function proc
 
 		const PERSIST_MODE_INSERT = 0;
 		const PERSIST_MODE_UPDATE = 1;

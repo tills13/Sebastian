@@ -87,40 +87,34 @@
             }
         }
 
-        public function computeColumnSets($class, $joins, $aliases) {
-            $columns = array_map(function($column) use ($class, $aliases) {
-                return "{$aliases[$class]}.{$column}";
-            }, $this->getNonForeignColumns($class));
+        public function computeColumnSets($entity, $joins, $aliases) {
+            $localFields = $this->getNonForeignColumns($entity);
+
+            $em = $this;
+            $columns = array_map(function($column) use ($em, $entity, $aliases) {
+                $column = $em->mapFieldToColumn($entity, $column);
+                $entity = strtolower($entity);
+                return [ "{$entity}_{$column}" => "{$aliases[0]}.{$column}" ];
+            }, array_keys($localFields));
+
+            $definition = $this->getDefinition($entity);
+            $entityFields = $definition->sub('fields', []);
             
-            foreach ($joins as $key => $join) {
-                if (array_key_exists('targetEntity', $join)) {
-                    $mColumns = array_map(function($column) use ($join, $aliases) {
-                        if ($join['type'] == Repository::JOIN_TYPE_FK) {
-                            $key = "{$join['column']}_{$join['table']}";
-                        } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
-                            $mJoin = $join['join'];
-                            $key = "{$mJoin['joinColumnForeign']}_{$mJoin['joinTableForeign']}";
-                        }
+            foreach ($joins as $field => $join) {
+                $fieldConfig = $entityFields->sub($field);
 
-                        $columnName = "{$aliases[$key]}.{$column}";
-                        $columnAlias = "{$join['column']}_{$column}";
-                        return [$columnAlias => $columnName];
-                    }, $this->getNonForeignColumns($join['targetEntity']));
+                if ($fieldConfig->has('targetEntity')) {
+                    $target = $fieldConfig->get('targetEntity');
+                    $mEntityDefinition = $this->getDefinition($target);
+                    $mFields = $this->getNonForeignColumns($target);
+                    
+                    $mColumns = array_map(function($value, $key) use ($em, $target, $field, $aliases) {
+                        $column = $em->mapFieldToColumn($target, $key);
+                        return [ "{$field}_{$key}" => "{$aliases[$field]}.{$column}" ];
+                    }, $mFields, array_keys($mFields));
                 } else {
-                    if ($join['type'] == Repository::JOIN_TYPE_FK) {
-                        $key = "{$join['field']}_{$join['table']}";
-                        $column = $join['foreign'];
-                    } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
-                        $mJoin = $join['join'];
-                        $column = explode(':', $mJoin['joinColumnForeign'])[1];
-                        $key = "{$mJoin['joinColumnForeign']}_{$mJoin['joinTableForeign']}";
-                    }
-
-                    $columnName = "{$aliases[$key]}.{$column}";
-                    $columnAlias = "{$join['column']}_{$column}";
-                    $mColumns = [ $column => [$columnAlias => $columnName] ];
+                    $mColumns = ["{$aliases[$field]}.*"]; // select everything from that table 
                 }
-                
 
                 $columns = array_merge($columns, $mColumns);
             }
@@ -151,9 +145,6 @@
             }
 
             return $joins;
-
-            header("Content-Type:application/json");
-            die(print(json_encode($joins)));
         }
 
          /**
@@ -200,46 +191,32 @@
 
         public function generateTableAliases($entity, $joins = []) {
             $definition = $this->getDefinition($entity);
+            $entityFields = $definition->sub('fields', []);
 
             $aliases = [];
             $aliases[0] = substr($definition->get('table'), 0, 1);
 
             foreach ($joins as $field => $join) {
-                
+                $fieldConfig = $entityFields->sub($field);
+                $join = $fieldConfig->sub('join');
 
-
-
-                /*if ($join['type'] == Repository::JOIN_TYPE_FK) {
-                    $table = $join['table'];
-                    $alias = substr($table, 0, 1);
-                    
-                    if (array_key_exists('targetEntity', $join)) $local = $join['column'];
-                    else $local = $join['field'];
-                } else if ($join['type'] == Repository::JOIN_TYPE_JOIN_TABLE) {
-                    $mJoin = $join['join'];
-                    $table = $mJoin['joinTableLocal'];
-                    $alias = substr($table, 0, 1);
-                    $local = $mJoin['joinColumnLocal'];
-
-                    $index = 0;
-                    while (in_array($alias, $aliases)) $alias = $alias . $index;
-
-                    $aliases["{$local}_{$table}"] = $alias;
-
-                    $local = $mJoin['joinColumnForeign'];
-                    $table = $mJoin['joinTableForeign'];
-                    $alias = substr($table, 0, 1);
+                if ($fieldConfig->has('targetEntity')) {
+                    $mEntityDefinition = $this->getDefinition($fieldConfig->get('targetEntity'));
+                    $table = $mEntityDefinition->get('table');
+                } else {
+                    // todo handle join tables
+                    $table = $join->get('table');
                 }
 
-                $index = 0;
-                while (in_array($alias, $aliases)) {
-                    $alias = $alias . $index;
+                $alias = null;
+                $index = -1;
+                while(!$alias || in_array($alias, $aliases)) {
+                    $alias = substr($table, 0, 1) . ($index++ == -1 ? "" : $index);
                 }
 
-                $aliases["{$local}_{$table}"] = $alias;*/
+                $aliases[$field] = $alias;
             }
 
-            var_dump($aliases); die();
             return $aliases;
         }
 
@@ -370,11 +347,9 @@
                 throw new SebastianException("Unknown entity '{$entity}'");//SebastianException
             }
 
-            return array_values(array_map(function($column) {
-                return $column['column'];
-            }, array_filter($this->definitions[$entity]['fields'], function($entity) {
-                return !isset($entity['join']);
-            })));
+            return array_filter($this->definitions[$entity]['fields'], function($field) {
+                return !array_key_exists('join', $field);
+            });
         }
 
         public function getOneToOneMappedColumns($entity) {
@@ -491,18 +466,38 @@
             return $this->transformers;
         }
 
-        /**
-         * [getTable description]
-         * @param  [type] $class [description]
-         * @return [type]        [description]
-         *
-         * @todo resolve class if not found
-         */
-        public function getTable($class) {
-            if (!$this->definitions->has($class)) {
-                throw new SebastianException("Unknown class '{$class}'");
-            }
+        public function getColumnMap($entity) {
+            $definition = $this->getDefinition($entity);
+            $fields = $definition->get('fields');
 
-            return $this->definitions->get("{$class}.table");
+            return array_map(function($field) {
+                if (array_key_exists('column', $field)) return $field['column'];
+                else {
+                    return isset($field['join']['local']) ? $field['join']['local'] : $field['join']['localColumn'];
+                }
+            }, array_filter($fields, function($field, $name) {
+                if (array_key_exists('column', $field)) return true;
+                if (isset($field['join'])) {
+                    $join = $field['join'];
+                    return array_key_exists('local', $join) || 
+                           array_key_exists('localColumn', $join);
+                }
+            }, ARRAY_FILTER_USE_BOTH));
+        }
+
+        public function mapFieldToColumn($entity, $field) {
+            $entityConfig = $this->getDefinition($entity);
+            $columns = $this->getColumnMap($entity);
+
+            if (array_key_exists($field, $columns)) {
+                return $columns[$field];
+            } else {
+                var_dump($columns);
+                throw new \Exception("Field {$field} does not exist in {$entity}.");
+            }
+        }
+
+        public function mapColumnToField($entity, $column) {
+            
         }
     }
