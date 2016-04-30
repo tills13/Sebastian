@@ -3,6 +3,7 @@
 
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
+    use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Exception\SebastianException;
@@ -22,7 +23,7 @@
      * @author Tyler <tyler@sbstn.ca>
      * @since  Oct. 2015
      */
-    class Application {
+    class Application implements ContextInterface {
         protected $kernel;
         protected $config;
 
@@ -141,13 +142,18 @@
             }
         }
 
-        public function get($extension) {
-            if (isset($this->extensions[$extension])) {
-                return $this->extensions[$extension];
+        public function __call($method, $arguments) {
+            if (Utils::startsWith('get', $method)) {
+
             }
 
-            throw new SebastianException("Extension {$extension} not found");
+            if (!isset($this->extensions[$method])) {}
         }
+
+
+
+
+
 
         public function getApplicationName() {
             return $this->config->get('application.name');
