@@ -21,7 +21,7 @@
         }
 
         public function isCached($key) {
-            return apc_exists($key);
+            return apcu_exists($key);
         }
 
         public function load($key) {

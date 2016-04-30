@@ -7,7 +7,7 @@
 	use Sebastian\Core\Database\Statement\PreparedStatement;
 	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Utility\Collection\Collection;
-	use Sebastian\Utility\Logging\Logger;
+	use Sebastian\Utility\Logger\Logger;
 
 	/**
 	 * Connection

@@ -2,6 +2,7 @@
 	namespace Sebastian\Core\Repository;
 
 	use Sebastian\Application;
+	use Sebastian\Core\Cache\CacheManager;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Database\Query\Expression\ExpressionFactory;
 	use Sebastian\Core\Database\Query\Part\Join;
@@ -23,7 +24,6 @@
 	class Repository {
 		protected static $tag = "Repository";
 
-		protected $context;
 		protected $config;
 
 		protected $entity;
@@ -35,18 +35,20 @@
 		protected $cm;
 		protected $orc;
 		
-		public function __construct(Application $context, EntityManager $em, $entity = null, Configuration $config = null) {
-			$this->context = $context;
+		public function __construct(EntityManager $entityManager, CacheManager $cacheManager = null, Logger $logger = null, Configuration $config = null, $entity = null) {
+			$this->entityManager = $entityManager;
+			$this->cacheManager = $cacheManager;
+			$this->logger = $logger;
+			$this->connection = $entityManager->getConnection();
 
 			if ($config == null) $config = new Configuration();
 			$this->config = $config->extend([ 'use_reflection' => true ]);
 
-			$this->em = $em;
 			$this->entity = $entity;
-			$this->class = $this->em->getNamespacePath($this->entity);
-			$this->orc = $this->em->getObjectCache();
+			$this->class = $entityManager->getNamespacePath($this->entity);
+			$this->orc = $entityManager->getObjectReferenceCache();
 
-			$this->initCalled = false; // don't know why
+			$this->initCalled = false;
 			$this->init();
 		}
 
@@ -62,25 +64,20 @@
 			$this->initCalled = true;
 
 			if ($this->entity != null) {
-				$this->definition = $this->em->getDefinition($this->entity);
-				$this->nsPath = $this->em->getNamespacePath($this->entity);
+				$this->definition = $this->entityManager->getDefinition($this->entity);
+				$this->nsPath = $this->entityManager->getNamespacePath($this->entity);
 
 				$this->table = $this->definition->get('table');
 				$this->keys = $this->definition->get('keys');
 				$this->fields = $this->definition->sub('fields');
 
-				$this->joins = $this->em->computeJoinSets($this->entity);
-				$this->aliases = $this->em->generateTableAliases($this->entity, $this->joins);
-				$this->columns = $this->em->computeColumnSets($this->entity, $this->joins, $this->aliases);
+				$this->joins = $this->entityManager->computeJoinSets($this->entity);
+				$this->aliases = $this->entityManager->generateTableAliases($this->entity, $this->joins);
+				$this->columns = $this->entityManager->computeColumnSets($this->entity, $this->joins, $this->aliases);
 			}
 
 			$this->reflection = new \ReflectionClass($this->class);
 			$this->columnMap = $this->generateColumnMap();
-
-			// convenience
-			$this->cm = $this->context->getCacheManager();
-			$this->logger = $this->context->getLogger();
-			$this->connection = $this->em->getConnection();
 		}
 
 		/**
@@ -89,17 +86,18 @@
 		 * @param  array  $params [description]
 		 * @return [type]         [description]
 		 */
-		public function build($object = null, $params = []) {
-			if (!$object) $object = $this->initializeObject();
+		public function build($object = null, $fields = []) {
+			if (!$object) {
+				$classPath = $this->entityManager->getNamespacePath($this->entity);
+				$object = new $classPath();
+			}
+
+			if (!$fields) $fields = [];
 
 			$useReflection = $this->config->get('use_reflection', false);
 
-			foreach ($params as $key => $value) {
-				$fieldName = $this->columnMap->get($key);
-				$field = $this->fields->sub($fieldName);
-				if ($fieldName == null) continue;
-
-				$object = $this->setFieldValue($object, $fieldName, $value);
+			foreach ($fields as $field => $value) {
+				$object = $this->setFieldValue($object, $field, $value);
 			}
 
 			return $object;
@@ -126,8 +124,8 @@
 			try {
 				$result = $this->connection->execute($query, []);
 
-				$key = $this->cm->generateKey($object);
-				$this->cm->invalidate($key);
+				$key = $this->cacheManager->generateKey($object);
+				$this->cacheManager->invalidate($key);
 
 				return true;
 			} catch (\Exception $e) {
@@ -207,8 +205,8 @@
 			foreach ($results as $mResult) {
 				$skeleton = $this->build(null, $mResult);
 
-				foreach ($this->em->getOneToOneMappedColumns($this->entity) as $mapped) {
-					$repo = $this->em->getRepository($mapped['targetEntity']);
+				foreach ($this->entityManager->getOneToOneMappedColumns($this->entity) as $mapped) {
+					$repo = $this->entityManager->getRepository($mapped['targetEntity']);
 
 					$params = [];
 					foreach ($mResult as $key => $value) {
@@ -223,8 +221,8 @@
 					$skeleton = $this->build($skeleton, [$mapped['column'] => $entity]);
 				}
 
-				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
-					$repo = $this->em->getRepository($field['targetEntity']);
+				foreach ($this->entityManager->getMultiMappedFields($this->entity) as $key => $field) {
+					$repo = $this->entityManager->getRepository($field['targetEntity']);
 
 					$foreign = $mResult[$field['local']];
 					$entities = $repo->find([$field['foreign'] => $foreign]);
@@ -263,24 +261,26 @@
 			}
 
 			// check temp cache
-			$skeleton = $this->initializeObject($params);
+			$skeleton = $this->build(null, $params);
 			foreach ($this->keys as $key) {
-				if ($this->getFieldValue($skeleton, $this->columnMap[$key]) == null) return null;
+				if ($this->getFieldValue($skeleton, $key) == null) {
+					return null;
+				}
 			}
 
 			$orcKey = $this->orc->generateKey($skeleton);
 
 			if ($this->orc->isCached($orcKey)) {
-				$this->logger->info("hit _orc with {$orcKey}", "repo_log");
+				//$this->logger->info("hit _orc with {$orcKey}", "repo_log");
 				return $this->orc->load($orcKey);
 			} else {
 				$this->orc->cache($orcKey, $skeleton);
 			}
 
 			// then check long term cache
-			$cmKey = $this->cm->generateKey($skeleton);
-			if ($this->cm->isCached($cmKey)) {
-				return $this->cm->load($cmKey);
+			$cmKey = $this->cacheManager->generateKey($skeleton);
+			if ($this->cacheManager->isCached($cmKey)) {
+				return $this->cacheManager->load($cmKey);
 			}
 
 			$qf = $qf->select($this->columns)
@@ -291,19 +291,19 @@
 
 				if ($fieldConfig->has('targetEntity')) {
 					$target = $fieldConfig->get('targetEntity');
-					$mEntityConfig = $this->em->getDefinition($target);
+					$mEntityConfig = $this->entityManager->getDefinition($target);
 					$table = $mEntityConfig->get('table');
 
 					$foreignColumn = $join->get(
 						'foreignColumn', 
-						$this->em->mapFieldToColumn($target, $join->get('foreign'))
+						$this->entityManager->mapFieldToColumn($target, $join->get('foreign'))
 					);
 				} else {
 					$table = $join->get('table');
 					$foreignColumn = $join->get('foreignColumn');
 				}
 
-				$localColumn = $this->em->mapFieldToColumn($this->entity, $join->get('local'));
+				$localColumn = $this->entityManager->mapFieldToColumn($this->entity, $join->get('local'));
 				$withEntityKey = "{$this->aliases[0]}.{$localColumn}";
 
 				$alias = $this->aliases[$field];
@@ -316,19 +316,15 @@
 
 			$ef->reset();
 			$mExFactory = ExpressionFactory::getFactory();
-			foreach ($this->keys as $name => $key) {
-				$fieldName = $this->columnMap->get($key);
-				$value = $this->getFieldValue($skeleton, $fieldName);
+			foreach ($this->keys as $key) {
+				$value = $this->getFieldValue($skeleton, $key);
 
-				if ($value != null) {
-					$mExFactory->reset()->expr("{$this->aliases[0]}.{$key}")
-						->equals(":$fieldName"); // generates the individual expression
+				$column = $this->entityManager->mapFieldToColumn($this->entity, $key);
+				$mExFactory->reset()->expr("{$this->aliases[0]}.{$column}")
+					->equals(":$key"); // generates the individual expression
 
-					$qf->bind($fieldName, $value);
-					$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
-				} else {
-					throw new SebastianException("Primary Key {$key} cannot be null/blank");
-				}
+				$qf->bind($key, $value);
+				$ef->andExpr($mExFactory->getExpression()); // handles generating the final expression
 			}
 
 			$qf = $qf->where($ef->getExpression());
@@ -338,106 +334,103 @@
 			$results = $statement->fetchAll();
 
 			if ($results) {
-				$fields = $this->em->getNonForeignColumns($this->entity);
-
-				header("Content-Type: application/json");
-				print (json_encode($results)); die();
+				$fields = $this->entityManager->getNonForeignColumns($this->entity);
 
 				foreach ($this->fields as $field => $config) {
 					if (in_array($field, array_keys($fields))) {
-						if (!array_key_exists('join', $config)) {
-							$key = strtolower($this->entity) . "_" . $this->em->mapFieldToColumn($this->entity, $field);
-							$value = $results[0][$key];
-							$skeleton = $this->setFieldValue($skeleton, $field, $value);
-						}
+						$key = strtolower($this->entity) . "_" . $this->entityManager->mapFieldToColumn($this->entity, $field);
+						$value = $results[0][$key];
 					} else {
+						$join = $config->sub('join');
 
-					}
-				}
+						if ($config->has('targetEntity')) {
+							$target = $config->get('targetEntity');
+							$targetRepo = $this->entityManager->getRepository($target);
+							$targetFields = $this->entityManager->getNonForeignColumns($target);
+							
+							if (in_array($join->get('type', 'one'), ['one', 'onetoone', '1:1'])) {
+								array_walk($targetFields, function(&$value, $key) use($target, $field, $results) {
+									$key = strtolower("{$field}_{$key}");
+									$value = $results[0][$key];
+								});
 
-				header("Content-Type: application/json");
-				print (json_encode($skeleton)); die();
+								$value = $targetRepo->get($targetFields);
+							} else {
+								$seenKeys = [];
+								$keys = $targetRepo->getObjectKeys();
 
-				die();
+								$realColumns = array_map(function($mField) use ($target, $field) {
+									return strtolower("{$field}_{$mField}");
+								}, array_keys($targetFields));
 
+								$realKeys = array_map(function($mField) use ($target, $field) {
+									return strtolower("{$field}_{$mField}");
+								}, $keys);
 
-				$mResults = [];
+								$slice = $results;
+								array_walk($slice, function(&$row, $index) use ($realColumns) {
+									$row = array_intersect_key($row, array_flip($realColumns));
+								});
 
-				
+								$value = array_filter($slice, function($row, $index) use (&$seenKeys, $realKeys) {
+									$mKeys = array_intersect_key($row, array_flip($realKeys));
+									$hash = md5(implode(array_values($mKeys)));
 
-				foreach ($this->fields as $name => $value) {
-					
-				}
+									if (in_array($hash, $seenKeys)) return false;
+									else {
+										$seenKeys[] = $hash;
+										return array_reduce(array_intersect_key($row, array_flip($realKeys)), function($carry, $value) {
+											return $carry && $value != null;
+										}, true);
+									}
+								}, ARRAY_FILTER_USE_BOTH);
 
+								array_walk($value, function(&$row, $index) use ($field, $targetRepo, $targetFields) {
+									$mValue = array_walk($targetFields, function(&$value, $key) use ($row, $field) {
+										$key = strtolower("{$field}_{$key}");
+										$value = $row[$key];
+									});
 
+									$row = $targetRepo->get($targetFields);
+								});
 
-				$results = $this->processResults($results);
-				
-				var_dump($skeleton); die();
-
-				/*foreach ($this->em->getOneToOneMappedColumns($this->entity) as $key => $mapped) {
-					if (array_key_exists('targetEntity', $mapped)) {
-						$repo = $this->em->getRepository($mapped['targetEntity']);	
-
-						$row = $results[0];
-						$objectParams = [];
-						foreach ($row as $key => $column) {
-							$nMatches = preg_match("/{$mapped['column']}_([a-zA-Z0-9_]+)/", $key, $matches);
-							if ($nMatches != 0) $objectParams[$matches[1]] = $row[$matches[0]];	
-						}
-
-						try {
-							$value = $repo->get($objectParams);
-						} catch (SebastianException $e) {
-							$value = null;
-						}
-					} else {
-						if (array_key_exists('join', $mapped)) {
-							$column = explode(':', $mapped['join']['joinColumnForeign'])[1];
-							$value = $results["{$key}_{$column}"];
-						} else {
-							$value = $results["{$key}_{$mapped['table']}"];
-						}
-					}
-					
-					$skeleton = $this->build($skeleton, [$mapped['column'] => $value]);
-				}
-
-				foreach ($this->em->getMultiMappedFields($this->entity) as $key => $field) {
-					//if (array)
-					/*if (array_key_exists('join', $field)) {
-
-					}
-
-
-					if (array_key_exists('targetEntity', $field)) {
-						$repo = $this->em->getRepository($field['targetEntity']);
-					
-						if (array_key_exists('join', $field)) { // join table
-							foreach ($results as $row) {
-								$objectParams = [];
-								foreach ($row as $mKey => $column) {
-									$nMatches = preg_match("/{$key}_([a-zA-Z0-9_]+)/", $mKey, $matches);
-									if ($nMatches != 0) $objectParams[$matches[1]] = $row[$matches[0]];	
-								}
-
-								$values[] = $repo->get($objectParams);
+								$value = array_values($value);
 							}
-						} else { // fk
-							$foreign = $results[0][$field['local']];
-							$values = $repo->find([$field['local'] => $foreign]);
-						}
-					} else {
-						if (array_key_exists('join', $field)) {
-							$column = explode(':', $mapped['join']['joinColumnForeign'])[1];
-							$value = $results["{$key}_{$column}"];
 						} else {
-							$value = $results["{$key}_{$field['table']}"];
+							$columns = $join->get('columns');
+							$idColumns = $join->get('idColumns', [$columns[0]]);
+							$realColumns = array_map(function($column) use ($field) { return "{$field}_{$column}"; }, $columns);
+							$realIdColumns = array_map(function($column) use ($field) { return "{$field}_{$column}"; }, $idColumns);
+
+							if (in_array($join->get('type', 'one'), ['one', 'onetoone', '1:1'])) {
+								$row = $results[0];
+								$value = array_intersect_key($row, array_flip($realColumns));
+							} else {
+								$seenKeys = [];
+
+								$slice = $results;
+								array_walk($slice, function(&$row, $index) use ($realColumns) {
+									$row = array_intersect_key($row, array_flip($realColumns));
+								});
+
+								$value = array_values(array_filter($slice, function($row, $index) use (&$seenKeys, $realIdColumns) {
+									$keys = array_intersect_key($row, array_flip($realIdColumns));
+									$hash = md5(implode(array_values($keys)));
+
+									if (in_array($hash, $seenKeys)) return false;
+									else {
+										$seenKeys[] = $hash;
+										return array_reduce(array_intersect_key($row, array_flip($realIdColumns)), function($carry, $value) {
+											return $carry && $value != null;
+										}, true);
+									}
+								}, ARRAY_FILTER_USE_BOTH));
+							}
 						}
 					}
-					
-					$skeleton = $this->build($skeleton, [$key => $values]);*/
-				//}
+
+					$skeleton = $this->setFieldValue($skeleton, $field, $value);
+				}
 			} else {
 				$this->orc->invalidate($orcKey); // get rid of the reference
 				return null;
@@ -445,7 +438,7 @@
 			
 			// persist it
 			$this->orc->cache($orcKey, $skeleton);
-			$this->cm->cache(null, $skeleton);
+			$this->cacheManager->cache(null, $skeleton);
 
 			return clone $skeleton; // necessary to "sever" the object from the reference cache
 		}
@@ -477,7 +470,7 @@
 			}
 
 			if ($mode == Repository::PERSIST_MODE_INSERT) {
-				$columns = $this->em->getNonForeignColumns($this->entity);
+				$columns = $this->entityManager->getNonForeignColumns($this->entity);
 
 				foreach ($columns as $column) {
 					$fieldName = $this->columnMap->get($column);
@@ -488,7 +481,7 @@
 					}
 				}
 
-				$foreign = $this->em->getOneToOneMappedColumns($this->entity);
+				$foreign = $this->entityManager->getOneToOneMappedColumns($this->entity);
 
 				// todo: do I have to persist these foreign objects?
 				foreach ($foreign as $name => $foreign) { // lmfao
@@ -498,7 +491,7 @@
 					$fObject = $this->getFieldValue($object, $fieldName);
 
 					if ($fObject != null) {
-						$fRepo = $this->em->getRepository($foreign['targetEntity']);
+						$fRepo = $this->entityManager->getRepository($foreign['targetEntity']);
 						$fFieldName = $fRepo->getColumnMap()->get($foreign['foreign']);
 
 						$value = $fRepo->getFieldValue($fObject, $fFieldName);
@@ -529,8 +522,8 @@
 				//print ($qf->getQuery());
 			}
 
-			$key = $this->cm->generateKey($object);
-			$this->cm->invalidate($key);
+			$key = $this->cacheManager->generateKey($object);
+			$this->cacheManager->invalidate($key);
 			
 			return $object;
 		}
@@ -559,12 +552,12 @@
 			if ($type != null) {
 				if ($field->has('transformer')) {
 					$mTransformer = $field->get('transformer');	
-					$transformer = $this->em->getTransformer($mTransformer);
+					$transformer = $this->entityManager->getTransformer($mTransformer);
 
 					if ($transformer == null) {
 						throw new SebastianException("Unable to find transformer {$mTransformer}.");
 					}
-				} else $transformer = $this->em->getTransformer($type);
+				} else $transformer = $this->entityManager->getTransformer($type);
 				
 				if ($transformer != null) {
 					$value = $transformer->transform($value);
@@ -610,7 +603,7 @@
 			}
 
 			if ($type != null) {
-				$transformer = $this->em->getTransformer($type);
+				$transformer = $this->entityManager->getTransformer($type);
 
 				if ($transformer != null) {
 					$value = $transformer->reverseTransform($value);
@@ -626,7 +619,7 @@
 				$methodName[0] = strtoupper($methodName[0]);
 				$methodName = $prefix . $methodName;
 
-				if (method_exists($this->em->getNamespacePath($this->entity), $methodName)) {
+				if (method_exists($this->entityManager->getNamespacePath($this->entity), $methodName)) {
 					return $methodName;
 				}
 			}
@@ -642,7 +635,7 @@
 				$methodName[0] = strtoupper($methodName[0]);
 				$methodName = $prefix . $methodName;
 
-				if (method_exists($this->em->getNamespacePath($this->entity), $methodName)) {
+				if (method_exists($this->entityManager->getNamespacePath($this->entity), $methodName)) {
 					return $methodName;
 				}
 			}
@@ -652,24 +645,20 @@
 			} else return null;
 		}
 
-		// MISC
-		private function initializeObject($params = []) {
-			$object = $this->em->getNamespacePath($this->entity);
-			$object = new $object();
-
-			return $this->build($object, $params);
-		}
-
 		public function getColumnMap() {
 			return $this->columnMap;
 		}
 
 		public function getConnection() {
-			return $this->em->getConnection();
+			return $this->entityManager->getConnection();
 		}
 
 		public function getDefinition() {
 			return $this->definition;
+		}
+
+		public function getObjectKeys() {
+			return $this->keys;
 		}
 
 		public function getPrimaryKeys($object = null) {

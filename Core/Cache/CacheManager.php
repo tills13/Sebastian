@@ -55,7 +55,7 @@
 
         public function clear($cache = "") {
             if ($this->config->get('logging', false)) {
-                $this->logger->info("clearing {$cache}");
+                //$this->logger->info("clearing {$cache}");
             }
 
             return $this->driver->clear($cache);
@@ -65,7 +65,7 @@
             if ($key == null) $key = $this->generateKey($thing);
 
             if ($this->config->get('logging', false)) {
-                $this->logger->info("caching {$key}");
+                //$this->logger->info("caching {$key}");
             }
 
             return $this->driver->cache($key, $thing, $override, $ttl);
@@ -73,7 +73,7 @@
 
         public function invalidate($key) {
             if ($this->config->get('logging', false)) {
-                $this->logger->info("invalidating {$key}");
+                //$this->logger->info("invalidating {$key}");
             }
 
             return $this->driver->invalidate($key);
@@ -81,7 +81,7 @@
 
         public function isCached($key) {
             if ($this->config->get('logging', false)) {
-                $this->logger->info("query {$key}");
+                //$this->logger->info("query {$key}");
             }
 
             return $this->driver->isCached($key);
@@ -89,7 +89,7 @@
 
         public function load($key) {
             if ($this->config->get('logging', false)) {
-                $this->logger->info("loading {$key}");
+                //$this->logger->info("loading {$key}");
             }
 
             return $this->driver->load($key);

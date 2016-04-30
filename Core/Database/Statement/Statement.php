@@ -20,12 +20,12 @@
 		public function execute($params = []) {
 			$startTime = microtime(true);
 			try { parent::execute($params); } catch (PDOException $e) {
-				$this->logger->info("query failed", "db_log");
+				//$this->logger->info("query failed", "db_log");
 				throw $e;
 			}
 
 			$diff = microtime(true) - $startTime;
-			$this->logger->info("query completed in {$diff} seconds", "db_log", "QUERY");
+			//$this->logger->info("query completed in {$diff} seconds", "db_log", "QUERY");
 		}
 
 		public function getColumnType($column) {

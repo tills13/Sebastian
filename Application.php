@@ -13,7 +13,7 @@
     use Sebastian\Core\Templating\SRender;
 
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
-    use Sebastian\Utility\Logging\Logger;
+    //use Sebastian\Utility\Logger\Logger;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
 
@@ -44,7 +44,7 @@
             $this->extensions = [];
             $this->exceptionHandlers = [];
             
-            $this->logger = new Logger($this, $config->sub('logging'));
+            //$this->logger = new Logger($this, $config->sub('logging'));
             $this->cacheManager = new CacheManager($this, $config->sub('cache'));
             $this->connection = new Connection($this, $config->sub('database'));
             $this->entityManager = new EntityManager($this, $config->sub('entity'));
@@ -224,6 +224,6 @@
         }
 
         public function getLogger() {
-            return $this->logger;
+            //return $this->logger;
         }
     }

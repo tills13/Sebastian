@@ -6,7 +6,7 @@
 	use Sebastian\Core\Database\Statement\Statement;
 	use Sebastian\Core\Database\Transformer\TransformerInterface;
 	use Sebastian\Utility\Configuration\Configuration;
-	use Sebastian\Utility\Logging\Logger;
+	use Sebastian\Utility\Logger\Logger;
 
 	abstract class SebastianPDO extends PDO {
 		protected $connection;

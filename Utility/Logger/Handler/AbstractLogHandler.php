@@ -1,17 +1,19 @@
 <?php
-	namespace Sebastian\Utility\Logging\Handler;
+	namespace Sebastian\Utility\Logger\Handler;
 
 	use Sebastian\Utility\Configuration\Configuration;
-	use Sebastian\Utility\Logging\Logger;
+	use Sebastian\Utility\Logger\Logger;
+	use Sebastian\Utility\Logger\LoggerInterface;
 
 	abstract class AbstractLogHandler implements LogHandlerInterface {
 		protected $logger;
 		protected $name;
 		protected $config;
 
-		public function __construct(Logger $logger, $name, Configuration $config) {
-			$this->logger = $logger;
-			$this->name = $name;
+		public function __construct(LoggerInterface $logger, Configuration $config = null, $name) {
+			$this->setLogger($logger);
+			$this->setName($name);
+
 			$this->config = $config == null ? new Configuration() : $config;
 			$this->config = $this->config->extend([
 				'threshold' => Logger::INFO
@@ -20,6 +22,10 @@
 
 		abstract public function __destruct();
 		abstract public function log($message);
+
+		public function setLogger(LoggerInterface $logger) {
+			$this->logger = $logger;
+		}
 
 		public function getLogger() {
 			return $this->logger;

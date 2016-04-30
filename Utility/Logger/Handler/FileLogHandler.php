@@ -1,9 +1,10 @@
 <?php
-	namespace Sebastian\Utility\Logging\Handler;
+	namespace Sebastian\Utility\Logger\Handler;
 
 	use \RuntimeException;
 	use Sebastian\Utility\Configuration\Configuration;
-	use Sebastian\Utility\Logging\Logger;
+	use Sebastian\Utility\Logger\Logger;
+	use Sebastian\Utility\Logger\LoggerInterface;
 
 	class FileLogHandler extends AbstractLogHandler {
 		const STD_OUT_HANDLE = "php://stdout";
@@ -11,8 +12,8 @@
 		protected $fileHandle;
 		protected $filePath;
 
-		public function __construct(Logger $logger, $name, Configuration $config = null) {
-			parent::__construct($logger, $name, $config);
+		public function __construct(LoggerInterface $logger, Configuration $config = null, $name) {
+			parent::__construct($logger, $config, $name);
 	
 			$this->config = $this->config->extend([
 				'dir' => $this->logger->getContext()->getDefaultLogPath(),

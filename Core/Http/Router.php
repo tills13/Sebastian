@@ -51,7 +51,7 @@
 
 			$this->em = $context->getEntityManager();
 			$this->cm = $context->getCacheManager();
-			$this->logger = $context->getLogger();
+			////$this->logger = $context->getLogger();
 		}
 
 		public function attachComponent(Component $component) {
@@ -227,7 +227,7 @@
 				if (count($matches) > 0) {
 					$namespace = $this->getContext()->getNamespace();
 
-					$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
+					//$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
 
 					$controller = null;
 					if ($route->has('component')) {
@@ -249,7 +249,7 @@
 						if (!$controller) continue;
 					}
 
-					$this->logger->info("using controller $controller");
+					//$this->logger->info("using controller $controller");
 
 					$method = $route->get('method') . 'Action';
 					$reflection = new \ReflectionMethod($controller, $method);

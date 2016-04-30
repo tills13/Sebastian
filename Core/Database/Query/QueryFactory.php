@@ -26,10 +26,13 @@
 		public function select() {
 			$this->query = new Query();
 
-			$columns = array_pop(func_get_args());
+			$args = func_get_args();
+			$columns = array_pop($args);
+			
 			foreach ($columns as $column) {
 				if (is_array($column)) {
-					$alias = array_pop(array_keys($column));
+					$keys = array_keys($column);
+					$alias = array_pop($keys);
 					$name = $column[$alias];
 
 					$this->query->selectColumn($name, $alias);
@@ -73,7 +76,8 @@
 
 			foreach (func_get_args() as $source) {
 				if (is_array($source)) {
-					$alias = array_pop(array_keys($source));
+					$keys = array_keys($source);
+					$alias = array_pop($keys);
 					$name = $source[$alias];
 				} else {
 					$name = $source;
@@ -93,7 +97,8 @@
 
 		public function join($type, $table, $on = null) {
 			if (is_array($table)) {
-				$tableAlias = array_pop(array_keys($table));
+				$keys = array_keys($table);
+				$tableAlias = array_pop($keys);
 				$tableName = $table[$tableAlias];
 			} else {
 				$tableName = $table;

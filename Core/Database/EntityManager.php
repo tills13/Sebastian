@@ -27,10 +27,9 @@
 
         public function __construct($context, Configuration $config = null) {
             $this->context = $context;
+            $this->entities = $config;
 
-            $this->repositories = $config;
-            //var_dump($config);
-            $this->definitions = Configuration::fromFilename('orm.yaml');//$context->loadConfig("orm.yaml");
+            $this->definitions = Configuration::fromFilename('orm.yaml');
             $this->logger = $context->getLogger();
 
             $this->repositoryStore = new Collection();
@@ -127,8 +126,6 @@
 
                 $columns = array_merge($columns, $mColumns);
             }
-
-            var_dump($columns); die();
 
             return $columns;
         }
@@ -267,7 +264,7 @@
             $components = $this->context->getComponents();
             $bestGuessSimpleClass = strstr($class, '\\') ? substr($class, strrpos($class, '\\') + 1) : $class;
 
-            if ($this->repositories->has($class)) {
+            if ($this->entities->has($class)) {
                 return $class;
             }
 
@@ -293,53 +290,13 @@
             return $this->definitions->sub($entity);
         }
 
-        public function getMultiMappedFields($entity) {
-            if (!$this->definitions->has($entity)) {
-                throw new SebastianException("Unknown entity '{$entity}'");//SebastianException
-            }
-
-            $fields = array_filter($this->definitions[$entity]['fields'], function($entity) {
-                return isset($entity['relation']) && (
-                    strtolower($entity['relation']) == 'many' ||
-                    strtolower($entity['relation']) == 'onetomany' || 
-                    strtolower($entity['relation']) == '1:x'
-                );
-            }); 
-
-            return array_map(function($key, $field) {
-                if (array_key_exists('targetEntity', $field)) {
-                    $mField = [ 'targetEntity' => $field['targetEntity'] ];    
-                } else {
-                    if (!isset($field['table'])) {
-                        if (!isset($field['join']) && !isset($field['join']['joinTableLocal'])) {
-                            throw new \Exception("A target entity (targetEntity) must be specified or a table must be declared either under the object field spec. or under the join field for relations");    
-                        } else $mField = [ 'table' => $field['join']['joinColumnLocal'] ];
-                    } else {
-                        $mField = [ 'table' => $field['table'] ];
-                    }
-                }
-
-                if (array_key_exists('join', $field)) {
-                    $mField['type'] = Repository::JOIN_TYPE_JOIN_TABLE;
-                    $mField['join'] = $field['join'];
-                } else {
-                    $mField['type'] = Repository::JOIN_TYPE_FK;
-                    $mField['local'] = $field['local'];
-                    $mField['foreign'] = $field['foreign'];
-                    $mField['field'] = $key;
-                }
-
-                return $mField;
-            }, array_keys($fields), $fields);
-        }
-
         /**
          * @todo split entities and repos
          * @return [type]
          */
         public function getNamespacePath($class) {
-            if ($this->repositories->has($class)) {
-                $entityInfo = $this->repositories[$class];
+            if ($this->entities->has($class)) {
+                $entityInfo = $this->entities[$class];
                 $entity = $entityInfo['entity'];
 
                 $entity = explode(':', $entity);
@@ -363,65 +320,12 @@
             });
         }
 
-        public function getOneToOneMappedColumns($entity) {
-            if (!$this->definitions->has($entity)) {
-                throw new SebastianException("Unknown entity '{$entity}'");//SebastianException
-            }
-
-            $definition = $this->definitions->get($entity);
-
-            $columnDefinitions = array_filter($definition['fields'], function($entity) {
-                return isset($entity['relation']) && (
-                    strtolower($entity['relation']) == 'one' ||
-                    strtolower($entity['relation']) == 'onetoone' || 
-                    strtolower($entity['relation']) == '1:1'
-                );
-            }); 
-
-            return array_map(function($column) {
-                if (array_key_exists('targetEntity', $column)) {
-                    $mColumn = [ 'targetEntity' => $column['targetEntity'] ];    
-                } else {
-                    if (!isset($column['table'])) {
-                        if (!isset($column['join']) && !isset($column['join']['joinTableLocal'])) {
-                            throw new \Exception("An entity must be specified or a table must be declared either under the object field spec. or under the join field for relations");    
-                        } else {
-                            $mColumn = [ 'table' => $column['join']['joinColumnLocal'] ];
-                        }
-                    } else {
-                        $mColumn = [ 'table' => $column['table'] ];
-                    }
-                }
-
-                // join table
-                if (array_key_exists('join', $column)) {
-                    $mColumn['join'] = $column['join'];
-
-                    $mColumns = $column['join']['joinColumnLocal'];
-                    $mColumns = explode(':', $mColumns);
-                    $mColumn['column'] = $mColumns[0];
-                } else {
-                    $mColumn['foreign'] = $column['foreign'];
-                    $mColumn['column'] = $column['column'];
-                }
-                
-                return $mColumn;
-            }, $columnDefinitions);
-        }
-
-        public function getObjectCache() {
-            return self::$_objectReferenceCache;
-        }
-
         public function getRepository($class) {
             if ($class instanceof Entity) $class = get_class($class);
-            if (!$this->repositories->has($class)) $class = $this->getBestGuessClass($class);
 
-            //if ($this->repositoryStore->has($class)) return $this->repositoryStore->get($class);
-
-            if ($this->repositories->has($class)) {
+            if ($this->entities->has($class)) {
                 $namespace = $this->context->getNamespace();
-                $info = $this->repositories->sub($class);
+                $info = $this->entities->sub($class);
 
                 if ($info->has('repository')) {
                     $repo = $info->get('repository');
@@ -450,11 +354,10 @@
                     }
                     
                     $config = new Configuration($info->get('config', []));
-                    $repo = new $repoClass($this->context, $this, $class, $config);
-                    //$this->repositoryStore->set($class, $repo);
+                    $repo = new $repoClass($this, $this->context->getCacheManager(), null, $config, $class);
                     return $repo;
                 } else {
-                    return new Repository($this->context, $this, $class);
+                    return new Repository($this, $this->context->getCacheManager(), null, null, $class);
                 }
             }
 
@@ -510,5 +413,9 @@
 
         public function mapColumnToField($entity, $column) {
             
+        }
+
+        public function getObjectReferenceCache() {
+            return self::$_objectReferenceCache;
         }
     }

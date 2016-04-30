@@ -1,11 +1,11 @@
 <?php
-    namespace Sebastian\Utility\Logging;
+    namespace Sebastian\Utility\Logger;
 
     use \RuntimeException;
     use Sebastian\Core\Application;
     use Sebastian\Utility\Configuration\Configuration;
-    use Sebastian\Utility\Logging\Handler\FileLogHandler;
-    use Sebastian\Utility\Logging\Handler\LogHandlerInterface;
+    use Sebastian\Utility\Logger\Handler\FileLogHandler;
+    use Sebastian\Utility\Logger\Handler\LogHandlerInterface;
 
     /**
      * Logger
@@ -13,7 +13,7 @@
      * @author Tyler <tyler@sbstn.ca>
      * @since Oct. 2015
      */
-    class Logger extends LoggingInterface {
+    class Logger extends BaseLogger {
         const EMERGENCY = 'EMERGENCY';
         const ALERT = 'ALERT';
         const CRITICAL = 'CRITICAL';
@@ -39,8 +39,7 @@
         protected $config;
         protected $handlers;
 
-        //public function __construct($logDirectory, $logLevelThreshold = Logger::DEBUG, $options = []) {
-        public function __construct($context, Configuration $config = null) {
+        public function __construct(Application $context, Configuration $config = null) {
             $this->context = $context;
 
             if (!$config) $config = new Configuration();
@@ -61,7 +60,7 @@
             //var_dump($handlers);
             foreach ($handlers as $name => $config) {
                 $type = $config->get('type', null);
-                if ($type == "file") $mHandler = new FileLogHandler($this, $name, $config);
+                if ($type == "file") $mHandler = new FileLogHandler($this, $config, $name);
                 else {
                     throw new RuntimeException("unknown log handler type {$type}");
                 }
@@ -137,8 +136,44 @@
         }
     }
 
-    class LoggingInterface {
-        public function emergency($message, $handler = null, $tag = null) {
+    class BaseLogger implements LoggerInterface {
+        public function emergency($message, array $context = []) {
+
+        }
+
+        public function alert($message, array $context = []) {
+
+        }
+
+        public function critical($message, array $context = []) {
+
+        }
+
+        public function error($message, array $context = []) {
+
+        }
+
+        public function warning($message, array $context = []) {
+
+        }
+
+        public function notice($message, array $context = []) {
+
+        }
+
+        public function info($message, array $context = []) {
+
+        }
+
+        public function debug($message, array $context = []) {
+
+        }
+
+        public function log($level, $message, array $context = []) {
+
+        }
+
+        /*public function emergency($message, $handler = null, $tag = null) {
             $this->log($handler, Logger::EMERGENCY, $tag, $message);
         }
 
@@ -168,5 +203,5 @@
        
         public function debug($message, $handler = null, $tag = null) {
             $this->log($handler, Logger::DEBUG, $tag, $message);
-        }
+        }*/
     }
