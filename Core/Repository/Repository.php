@@ -10,6 +10,7 @@
 	use Sebastian\Core\Repository\Transformer\ColumnTransformerInterface;
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
+	use Sebastian\Utility\Utility\Utils;
 
 	/**
 	 * Repository
@@ -337,10 +338,32 @@
 			$results = $statement->fetchAll();
 
 			if ($results) {
-				$mResults = [];
+				$fields = $this->em->getNonForeignColumns($this->entity);
 
 				header("Content-Type: application/json");
 				print (json_encode($results)); die();
+
+				foreach ($this->fields as $field => $config) {
+					if (in_array($field, array_keys($fields))) {
+						if (!array_key_exists('join', $config)) {
+							$key = strtolower($this->entity) . "_" . $this->em->mapFieldToColumn($this->entity, $field);
+							$value = $results[0][$key];
+							$skeleton = $this->setFieldValue($skeleton, $field, $value);
+						}
+					} else {
+
+					}
+				}
+
+				header("Content-Type: application/json");
+				print (json_encode($skeleton)); die();
+
+				die();
+
+
+				$mResults = [];
+
+				
 
 				foreach ($this->fields as $name => $value) {
 					
@@ -349,7 +372,7 @@
 
 
 				$results = $this->processResults($results);
-				$skeleton = $this->build($skeleton, $results[0]);
+				
 				var_dump($skeleton); die();
 
 				/*foreach ($this->em->getOneToOneMappedColumns($this->entity) as $key => $mapped) {

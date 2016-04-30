@@ -113,11 +113,22 @@
                         return [ "{$field}_{$key}" => "{$aliases[$field]}.{$column}" ];
                     }, $mFields, array_keys($mFields));
                 } else {
-                    $mColumns = ["{$aliases[$field]}.*"]; // select everything from that table 
+                    if (!$join->has('columns')) {
+                        throw new SebastianException("Arbitrary joins require a column definition");
+                    } else {
+                        $mColumns = $join->get('columns');
+                        $mColumns = array_map(function($column) use ($field, $aliases) {
+                            return [ "{$field}_{$column}" => "{$aliases[$field]}.{$column}" ];
+                        }, $mColumns);
+                    }
+
+                    //$mColumns = ["{$aliases[$field]}.*"]; // select everything from that table 
                 }
 
                 $columns = array_merge($columns, $mColumns);
             }
+
+            var_dump($columns); die();
 
             return $columns;
         }
