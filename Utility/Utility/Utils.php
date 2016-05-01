@@ -10,9 +10,13 @@
 	 * @since Oct. 2015
 	 */
 	class Utils {
-		public static function startsWith($haystack, $needle) {
+		public static function startsWith($haystack, $needle, $regex = false) {
 			if ($needle == null) return false;
-		    return $needle === "" || strrpos($haystack, $needle, -strlen($haystack)) !== false;
+
+			if ($regex) return $needle === "" || preg_match("^{$needle}.*", $haystack);
+			else {
+		    	return $needle === "" || strrpos($haystack, $needle, -strlen($haystack)) !== false;
+			}
 		}
 
 		public static function endsWith($haystack, $needle = null) {

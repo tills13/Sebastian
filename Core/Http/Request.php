@@ -2,6 +2,7 @@
 	namespace Sebastian\Core\Http;
 
 	use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Core\Session\Session;
 	
 	/**
 	 * Request
@@ -19,6 +20,7 @@
 		protected $type;
 
 		protected $attrs;
+		protected $session;
 
 		const REQUEST_TYPE_DEFAULT = 0;
 		const REQUEST_TYPE_JSON = 1;
@@ -50,6 +52,7 @@
 			$this->route = urldecode($this->route);
 			$this->type = Request::REQUEST_TYPE_DEFAULT;
 			$this->referrer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
+			$this->session = Session::fromGlobals();
 			
 			if ($this->server->has('HTTP_X_REQUESTED_WITH') &&
 				strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
@@ -123,6 +126,10 @@
 
 		public function params() {
 			return array_merge($this->post, $this->get);
+		}
+
+		public function getSession() {
+			return $this->session;
 		}
 
 		// GETTERS

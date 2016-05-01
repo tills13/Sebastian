@@ -3,8 +3,8 @@
 
 	use Sebastian\SEBASTIAN_ROOT;
 
-	use Sebastian\Application;
 	use Sebastian\Core\Component\Component;
+	use Sebastian\Core\Context\ContextInterface;
 	use Sebastian\Core\Database\EntityManager;
 	use Sebastian\Core\Entity\EntityInterface;
 	use Sebastian\Core\Exception\PageNotFoundException;
@@ -14,6 +14,8 @@
 	use Sebastian\Utility\Collection\Collection;
 	use Sebastian\Utility\Configuration\Configuration;
 	use Sebastian\Utility\Utility\Utils;
+
+	use \ReflectionClass;
 	
 	/**
 	 * Router
@@ -37,7 +39,7 @@
 		 * @param  Kernel $context application context
 		 * @return Router the router
 		 */
-		public static function getRouter(Application $context) {
+		public static function getRouter(ContextInterface $context) {
 			if (self::$router == null) {
 				self::$router = new Router($context);
 			}
@@ -68,11 +70,10 @@
 
 			$paths = [
 				\APP_ROOT . DIRECTORY_SEPARATOR . "../config/routing.yaml", // master routing file, if required
-				SEBASTIAN_ROOT . "/Core/Resources/config/routing.yaml" // internal for css/js/font/assets
 			]; // add default routes
 
 			$paths = $paths + array_map(function($component) use ($namespace) {
-				return \APP_ROOT."/{$namespace}{$component->getPath()}/routing.yaml";
+				return $component->getRoutingConfig();
 			}, $components);
 
 			foreach ($paths as $index => $path) {
@@ -103,41 +104,6 @@
 				$count = count($routes);
 				$time = microtime(true) - $startTime;
 			}
-
-
-			/*foreach ($components as $component) {
-				$config = $component->getRoutingConfig();
-				//print ($config); die();
-
-				//if (!$config) continue;
-
-				$startTime = microtime(true);
-				$routes = Configuration::fromPath($config);
-
-				foreach ($routes as $name => $mRoute) {
-					if ($mRoute->has('type') || $mRoute->get('type') == 'group') {
-						$this->addRouteGroup($name, $mRoute);
-					} else {
-						// required fields
-						$route = $mRoute->get('route');
-						$controller = $mRoute->get('controller');
-						$method = $mRoute->get('method');
-
-						// optional
-						$methods = $mRoute->get('methods', ['GET', 'POST']);
-						$requirements = $mRoute->get('requirements', []);
-
-						$this->addRoute($name, $route, $controller, $method, $requirements, $methods);
-					}
-				}
-
-				var_dump($routes);die();
-			}*/
-
-
-
-
-			//die();
 		}
 
 		public function addRouteGroup($groupName, $group) {
@@ -219,6 +185,9 @@
 		public function resolve(Request $request) {
 			$components = $this->getContext()->getComponents(true);
 
+			//header("Content-Type: application/json");
+			//print(json_encode($this->routes)); die();
+
 			foreach ($this->routes as $index => $route) {
 				if (!in_array($request->method(), $route['methods'])) continue;
 
@@ -232,6 +201,7 @@
 					$controller = null;
 					if ($route->has('component')) {
 						$component = $this->getContext()->getComponent($route->get('component'));
+
 						if (!$component) continue;
 
 						if ($component->hasController($route['controller'])) {
@@ -293,7 +263,7 @@
 				} elseif ($class == Request::class) {
 					$value = $request;
 				} elseif ($class == Session::class) {
-					$value = $this->getContext()->getSession();
+					$value = $request->getSession();
 				} elseif ($param->isDefaultValueAvailable()) {
 					$value = $param->getDefaultValue();
 				} else {

@@ -7,16 +7,17 @@
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Router;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\Response;
-    use Sebastian\Core\Session\Session;
     use Sebastian\Core\Templating\SRender;
 
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     //use Sebastian\Utility\Logger\Logger;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Utility\Utils;
 
     /**
      * Application
@@ -27,9 +28,9 @@
         protected $kernel;
         protected $config;
 
+        protected $router;
         protected $cacheManager;
         protected $connection;
-        protected $entityManager;
 
         protected $components;
         protected $services;
@@ -42,25 +43,20 @@
             $this->config = $config;
 
             $this->components = [];
-            $this->extensions = [];
+            $this->extensions = new Collection();
             $this->exceptionHandlers = [];
             
             //$this->logger = new Logger($this, $config->sub('logging'));
             $this->cacheManager = new CacheManager($this, $config->sub('cache'));
             $this->connection = new Connection($this, $config->sub('database'));
-            $this->entityManager = new EntityManager($this, $config->sub('entity'));
+            //$this->entityManager = new EntityManager($this, $config->sub('entity'));
 
-            $this->session = Session::fromGlobals($this);
             $this->router = Router::getRouter($this);
         }
 
         public function preHandle() {
             $this->checkComponentRequirements();
             $this->router->loadRoutes();
-
-            $this->extensions['templating'] = new SRender($this, null, array_map(function($component) {
-                return $component->getResourceUri('views', true);
-            }, $this->getComponents(true)));
 
             $this->registerServices();
         }
@@ -78,18 +74,32 @@
                 }
                 
                 $response = call_user_func_array([$controller, $method], $arguments->toArray());
+            
+
 
                 if ($response == null || !$response instanceof Response) {
                     throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
             } catch (\Exception $e) {
-                foreach ($this->exceptionHandlers as $handler) {
-                    if ($handler->onException($e)) { // handled
-                        break;
-                    }
+                if ($e instanceof HttpException) {
+                    $response = new Response($e->getMessage() ?: get_class($e));
+                    $response->setResponseCode($e->getHttpResponseCode());
+                    return $response;
+                } else {
+                    /*foreach ($this->exceptionHandlers as $handler) {
+                        if ($handler->onException($e)) { // handled
+                            break;
+                        }
+                    }*/
+
+                    //if (isset($this->components['Internal'])) {
+                        return new Response($this->get('templating')->render('exception/exception', [
+                            'exception' => $e
+                        ]));
+                    //}
+
+                    //die($e->getMessage());
                 }
-                
-                die();
             }
         }
 
@@ -113,6 +123,8 @@
             $this->components = array_filter($this->getComponents(true), function($component) use ($context) {
                 return $component->checkRequirements($context);
             });
+
+            foreach ($this->components as $component) $component->setup();
         }
 
         public function registerComponent(Component $component) {
@@ -142,12 +154,30 @@
             }
         }
 
-        public function __call($method, $arguments) {
-            if (Utils::startsWith('get', $method)) {
+        public function __set($offset, $value) {
+            $this->extensions->set($offset, $value);
+        }
 
+        public function get($offset) {
+            return $this->{$offset};
+        }
+
+        public function __get($offset) {
+            return $this->extensions->get($offset);
+        }
+
+        public function __call($method, $arguments = []) {
+            if (Utils::startsWith($method, 'get')) {
+                $method = substr($method, 3);
+                $method[0] = strtolower($method);
+                return $this->extensions->get($method);
             }
 
-            if (!isset($this->extensions[$method])) {}
+            if (!$this->extensions->has($method)) {
+                throw new SebastianException();
+            } else {
+                return $this->extensions->get($method);
+            }
         }
 
 
@@ -200,10 +230,6 @@
             return $this->connection;
         }
 
-        public function getEntityManager() {
-            return $this->entityManager;
-        }
-
         public function getNamespace() {
             return $this->config->get('application.namespace');
         }
@@ -218,10 +244,6 @@
 
         public function getService($name) {
             return isset($this->services[$name]) ? $this->services[$name] : null;
-        }
-
-        public function getSession() {
-            return $this->session;
         }
 
         public function getDefaultLogPath() {

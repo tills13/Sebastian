@@ -13,17 +13,15 @@
 	 */
 	class Session {
 		protected $cookies;
-		protected $context;
 
-		public function fromGlobals($app) {
-			$session = new Session($app);
+		public function fromGlobals() {
+			$session = new Session();
 			return $session;
 		}
 
-		protected function __construct($app) {
+		protected function __construct() {
 			$this->start();
-
-			$this->context = $app;
+			
 			$token = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
 			
 			$this->set('session_token', $token);
@@ -108,12 +106,7 @@
 			return $this->get('session_token');
 		}
 
-		public function getUser($blank = false) {
-			if ($blank && (!isset($_SESSION['session_user']) || is_null($_SESSION['session_user']))) {
-				$em = $this->context->getEntityManager();
-				return $em->getNamespacePath('User');
-			}
-
+		public function getUser() {
 			return $this->get('session_user');
 		}
 
