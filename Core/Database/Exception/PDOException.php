@@ -1,12 +1,12 @@
 <?php
 
-	use \PDOException as PHPPDOException;
+    use \PDOException as PHPPDOException;
 
-	class PDOException {
-		protected $code;
-		protected $message;
+    class PDOException {
+        protected $code;
+        protected $message;
 
-		public function __construct(PHPPDOException $e) {
+        public function __construct(PHPPDOException $e) {
 
-		}
-	}
+        }
+    }

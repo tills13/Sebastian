@@ -1,4 +1,4 @@
 <?php
-	namespace Sebastian\Core\Database\Query\Part;
+    namespace Sebastian\Core\Database\Query\Part;
 
-	interface Part {}
+    interface Part {}

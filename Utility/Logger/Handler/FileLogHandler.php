@@ -1,49 +1,49 @@
 <?php
-	namespace Sebastian\Utility\Logger\Handler;
+    namespace Sebastian\Utility\Logger\Handler;
 
-	use \RuntimeException;
-	use Sebastian\Utility\Configuration\Configuration;
-	use Sebastian\Utility\Logger\Logger;
-	use Sebastian\Utility\Logger\LoggerInterface;
+    use \RuntimeException;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Logger\Logger;
+    use Sebastian\Utility\Logger\LoggerInterface;
 
-	class FileLogHandler extends AbstractLogHandler {
-		const STD_OUT_HANDLE = "php://stdout";
+    class FileLogHandler extends AbstractLogHandler {
+        const STD_OUT_HANDLE = "php://stdout";
 
-		protected $fileHandle;
-		protected $filePath;
+        protected $fileHandle;
+        protected $filePath;
 
-		public function __construct(LoggerInterface $logger, Configuration $config = null, $name) {
-			parent::__construct($logger, $config, $name);
-	
-			$this->config = $this->config->extend([
-				'dir' => $this->logger->getContext()->getDefaultLogPath(),
-	            'filename' => "{app_name}_{name}",
-	            'extension' => "log",
-	            'permissions' => 0777,
-	            'truncation' => '10MB'
-			]);
+        public function __construct(LoggerInterface $logger, Configuration $config = null, $name) {
+            parent::__construct($logger, $config, $name);
+    
+            $this->config = $this->config->extend([
+                'dir' => $this->logger->getContext()->getDefaultLogPath(),
+                'filename' => "{app_name}_{name}",
+                'extension' => "log",
+                'permissions' => 0777,
+                'truncation' => '10MB'
+            ]);
 
-			$this->setLogFilePath($this->config->get('dir'));
-			$this->setFileHandle('a');
-		}
+            $this->setLogFilePath($this->config->get('dir'));
+            $this->setFileHandle('a');
+        }
 
-		public function __destruct() {
-			if ($this->fileHandle) fclose($this->fileHandle);
-		}
+        public function __destruct() {
+            if ($this->fileHandle) fclose($this->fileHandle);
+        }
 
-		public function setFileHandle($writeMode = 'w+') {
+        public function setFileHandle($writeMode = 'w+') {
             $this->fileHandle = fopen($this->filePath, $writeMode);
         }
 
         public function setLogFilePath($directory) {
-        	$filename = $this->generateFileName();
-        	$extension = $this->config->get('extension', 'log');
+            $filename = $this->generateFileName();
+            $extension = $this->config->get('extension', 'log');
 
-        	if (!file_exists($directory)) {
+            if (!file_exists($directory)) {
                 mkdir($directory, $this->config->get('permissions'), true);
             }
 
-        	if ($filename && $directory) {
+            if ($filename && $directory) {
                 if (strpos($filename, '.log') !== false || strpos($filename, '.txt') !== false) {
                     $this->filePath = $directory . DIRECTORY_SEPARATOR . $filename;
                 } else {
@@ -52,15 +52,15 @@
             }
         }
 
-		public function log($message) {
-			if (!fwrite($this->fileHandle, $message)) {
-				throw new RuntimeException("{$this->filePath} could not be written to. Check that appropriate permissions have been set.");
-			}
-		}
+        public function log($message) {
+            if (!fwrite($this->fileHandle, $message)) {
+                throw new RuntimeException("{$this->filePath} could not be written to. Check that appropriate permissions have been set.");
+            }
+        }
 
-		private function generateFileName() {
-			$fileNameTemplate = $this->config->get('filename');
-			$fields = ['app_name', 'name', 'date'];
+        private function generateFileName() {
+            $fileNameTemplate = $this->config->get('filename');
+            $fields = ['app_name', 'name', 'date'];
 
             foreach ($fields as $field) {
                 $logger = $this->getLogger();
@@ -74,5 +74,5 @@
             }
 
             return $fileNameTemplate;
-		}
-	}
+        }
+    }

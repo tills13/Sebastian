@@ -1,38 +1,38 @@
 <?php
-	namespace Sebastian\Core\Database\Statement;
+    namespace Sebastian\Core\Database\Statement;
 
-	use \PDO as PDO;
-	use \PDOStatement as PDOStatement;
-	use \PDOException as PDOException;
-	use Sebastian\Core\Database\PDO\SebastianPDO;
-	use Sebastian\Core\Database\Transformer\TransformerInterface;
+    use \PDO as PDO;
+    use \PDOStatement as PDOStatement;
+    use \PDOException as PDOException;
+    use Sebastian\Core\Database\PDO\SebastianPDO;
+    use Sebastian\Core\Database\Transformer\TransformerInterface;
 
-	class Statement extends PDOStatement {
-		protected $pdo;
-		protected $columns;
-		protected $logger;
+    class Statement extends PDOStatement {
+        protected $pdo;
+        protected $columns;
+        protected $logger;
 
-		protected function __construct(SebastianPDO $pdo) {
-			$this->pdo = $pdo;
-			$this->logger = $pdo->getLogger();
-		}
+        protected function __construct(SebastianPDO $pdo) {
+            $this->pdo = $pdo;
+            $this->logger = $pdo->getLogger();
+        }
 
-		public function execute($params = []) {
-			$startTime = microtime(true);
-			try { parent::execute($params); } catch (PDOException $e) {
-				//$this->logger->info("query failed", "db_log");
-				throw $e;
-			}
+        public function execute($params = []) {
+            $startTime = microtime(true);
+            try { parent::execute($params); } catch (PDOException $e) {
+                //$this->logger->info("query failed", "db_log");
+                throw $e;
+            }
 
-			$diff = microtime(true) - $startTime;
-			//$this->logger->info("query completed in {$diff} seconds", "db_log", "QUERY");
-		}
+            $diff = microtime(true) - $startTime;
+            //$this->logger->info("query completed in {$diff} seconds", "db_log", "QUERY");
+        }
 
-		public function getColumnType($column) {
-			//if (is_string($column)) $column = 
-		}
+        public function getColumnType($column) {
+            //if (is_string($column)) $column = 
+        }
 
-		public function fetchAll($fetchStyle = PDO::FETCH_ASSOC, $className = null, $ctorArgs = null) {
-			return parent::fetchAll($fetchStyle);
-		}
-	}
+        public function fetchAll($fetchStyle = PDO::FETCH_ASSOC, $className = null, $ctorArgs = null) {
+            return parent::fetchAll($fetchStyle);
+        }
+    }
