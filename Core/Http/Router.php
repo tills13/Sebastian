@@ -199,7 +199,7 @@
                     //$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
 
                     $controller = null;
-                    if ($route->has(c'somponent')) {
+                    if ($route->has('component')) {
                         $component = $this->getContext()->getComponent($route->get('component'));
 
                         if (!$component) continue;
