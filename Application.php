@@ -3,7 +3,7 @@
 
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
-    use Sebastian\Core\Context\ContextInterface;
+    use Sebastian\Core\Context\Context;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Exception\SebastianException;
@@ -24,7 +24,7 @@
      * @author Tyler <tyler@sbstn.ca>
      * @since  Oct. 2015
      */
-    class Application implements ContextInterface {
+    class Application extends Context {
         protected $kernel;
         protected $config;
 
@@ -36,14 +36,13 @@
         protected $services;
         protected $exceptionHandlers;
 
-        protected $extensions = [];
-
         public function __construct(Kernel $kernel, Configuration $config = null) {
+            parent::__construct();
+
             $this->kernel = $kernel;
             $this->config = $config;
 
             $this->components = [];
-            $this->extensions = new Collection();
             $this->exceptionHandlers = [];
             
             //$this->logger = new Logger($this, $config->sub('logging'));
@@ -165,25 +164,6 @@
         public function __get($offset) {
             return $this->extensions->get($offset);
         }
-
-        public function __call($method, $arguments = []) {
-            if (Utils::startsWith($method, 'get')) {
-                $method = substr($method, 3);
-                $method[0] = strtolower($method);
-                return $this->extensions->get($method);
-            }
-
-            if (!$this->extensions->has($method)) {
-                throw new SebastianException();
-            } else {
-                return $this->extensions->get($method);
-            }
-        }
-
-
-
-
-
 
         public function getApplicationName() {
             return $this->config->get('application.name');

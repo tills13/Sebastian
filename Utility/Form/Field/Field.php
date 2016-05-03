@@ -104,7 +104,6 @@
             return $this->value;
         }
 
-
         public function validate() {
             $this->validated = true;
         }

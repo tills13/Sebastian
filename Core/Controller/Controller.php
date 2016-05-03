@@ -3,6 +3,7 @@
 
     use Sebastian\Application;
     use Sebastian\Core\Component\Component;
+    use Sebastian\Core\Context\Context;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\Response;
@@ -17,29 +18,17 @@
      * @author Tyler <tyler@sbstn.ca>
      * @since  Oct. 2015
      */
-    class Controller {
-        protected $headers;
-
+    class Controller extends Context {
+        protected $extensions;
         protected $context;
         protected $component;
 
-        protected $jsFiles;
-        protected $jsScripts;
-        protected $cssFiles;
-
-        protected $title;
-        protected $subtitle;
-
-        protected $tabs;
-
         public function __construct(Application $context, Component $component) {
             if (!$context || !$component) throw new Exception("Application and Component must be provided to the controller", 1);
-            
+            parent::__construct();
+
             $this->context = $context;
             $this->component = $component;
-
-            $this->cssFiles = [];
-            $this->jsFiles = [];
 
             $this->renderer = $this->context->get('templating');
         }
@@ -55,41 +44,22 @@
             return new RedirectResponse($url, $code);
         }
 
-        public function addJavascriptFiles($files = []) {
-            foreach ($files as $file) {
-                if (is_array($file)) {
-                    $this->addJavascriptFile($file['filename'], $file['isMin'], $file['version']);
-                } else $this->addJavascriptFile($file, false, 1);
-            }
-        }
-
-        public function addJavascriptFile($filename, $min = false, $version = 1) {
-            $this->jsFiles[$filename] = [
-                'filename' => $filename,
-                'isMin' => $min,
-                'version' => $version
-            ];
-        }
-
-        public function addCSSFile($filename, $min = false, $version = 1) {
-            $this->cssFiles[$filename] = [
-                'filename' => $filename,
-                'isMin' => $min,
-                'version' => $version
-            ];
-        }
-
         public function generateUrl($route = null, $args = []) {
             return $this->getContext()->getRouter()->generateUrl($route, $args);
         }
 
-        public function __call($method, $arguments) {
-            return $this->getContext()->$method($arguments);
+        public function __call($method, $args) {
+            $extension = parent::__call($method, $args);
+
+            if ($extension == null) {
+                return $this->context->$method($args);
+            }
         }
 
-        public function get() {
 
-        }
+
+
+
 
         public function getCacheManager() {
             return $this->getContext()->getCacheManager();
@@ -105,17 +75,6 @@
 
         public function getContext() {
             return $this->context;
-        }
-
-        /*public function getEntityManager() {
-            return $this->getContext()->getEntityManager();
-        }*/
-
-        public function getFormFactory() {
-            return FormFactory::getFactory(
-                $this->getContext(),
-                $this->getContext()->getConfig()->sub('form.factory', [])
-            );
         }
 
         public function getRequest() {
