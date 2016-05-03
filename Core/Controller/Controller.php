@@ -83,6 +83,14 @@
             return $this->getContext()->getRouter()->generateUrl($route, $args);
         }
 
+        public function __call($method, $arguments) {
+            return $this->getContext()->$method($arguments);
+        }
+
+        public function get() {
+
+        }
+
         public function getCacheManager() {
             return $this->getContext()->getCacheManager();
         }
@@ -99,9 +107,9 @@
             return $this->context;
         }
 
-        public function getEntityManager() {
+        /*public function getEntityManager() {
             return $this->getContext()->getEntityManager();
-        }
+        }*/
 
         public function getFormFactory() {
             return FormFactory::getFactory(

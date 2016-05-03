@@ -51,7 +51,6 @@
         }
 
         public function createForEntity(Entity $entity) {
-
         }
 
         public function add($name, $type, $params = []) {
