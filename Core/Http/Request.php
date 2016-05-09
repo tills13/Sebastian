@@ -11,6 +11,13 @@
      * @since  Oct. 2015
      */
     class Request {
+        const REQUEST_TYPE_DEFAULT = 0;
+        const REQUEST_TYPE_JSON = 1;
+        const REQUEST_TYPE_VIEW = 2;
+
+        const METHOD_GET = "GET";
+        const METHOD_POST = "POST";
+
         public $body;
 
         protected $get;
@@ -21,13 +28,6 @@
 
         protected $attrs;
         protected $session;
-
-        const REQUEST_TYPE_DEFAULT = 0;
-        const REQUEST_TYPE_JSON = 1;
-        const REQUEST_TYPE_VIEW = 2;
-
-        const METHOD_GET = "GET";
-        const METHOD_POST = "POST";
 
         public static function fromGlobals() {
             $request = new Request($_GET, $_POST, $_COOKIE, $_SERVER, $_FILES);
