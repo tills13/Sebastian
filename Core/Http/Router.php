@@ -290,6 +290,7 @@
         }
 
         public function generateUrl($name, $args = []) {
+            //var_dump($name); die();
             $route = $this->getRoute($name);
             if (!$this->getRoute($name)) throw new SebastianException("Route {$name} does not exist.");
             
