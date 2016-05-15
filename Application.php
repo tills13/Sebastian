@@ -10,6 +10,7 @@
     use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Router;
     use Sebastian\Core\Http\Request;
+    use Sebastian\Core\Http\Response\JsonResponse;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Templating\SRender;
 
@@ -85,6 +86,19 @@
                     $response->setResponseCode($e->getHttpResponseCode());
                     return $response;
                 } else {
+                    $request = $this->getRequest();
+
+                    if ($request->isXmlHttpRequest()) {
+                        $code = ($e instanceof HttpException) ? $e->getHttpResponseCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
+                        return new JsonResponse([
+                            'error' => $e->getMessage()
+                        ], $code);
+                    } else {
+                        return new Response($this->get('templating')->render('exception/exception', [
+                            'exception' => $e
+                        ]));
+                    }
+
                     /*foreach ($this->exceptionHandlers as $handler) {
                         if ($handler->onException($e)) { // handled
                             break;
@@ -92,9 +106,7 @@
                     }*/
 
                     //if (isset($this->components['Internal'])) {
-                        return new Response($this->get('templating')->render('exception/exception', [
-                            'exception' => $e
-                        ]));
+                        
                     //}
 
                     //die($e->getMessage());
