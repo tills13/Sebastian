@@ -107,7 +107,7 @@
         }
 
         public function isXmlHttpRequest() {
-            return ($_SERVER['HTTP_X_REQUESTED_WITH'] === 'xmlhttprequest');
+            return (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'xmlhttprequest');
         }
 
         public function isMobile() {

@@ -34,7 +34,7 @@
             $this->where = null;
             $this->limit = null;
             $this->offset = 0; 
-            $this->orderBy = new Collection();
+            $this->orderBy = [];
         }
 
         public function addBind($key, $value) {
@@ -102,11 +102,11 @@
         }
 
         public function addOrderBy($column, $direction) {
-            $this->orderBy->set($column, $direction);
+            $this->orderBy[$column] = $direction;
         }
 
         public function setOrderBy($column, $direction) {
-            $this->orderBy = new Collection([$column => $direction]);
+            $this->orderBy = [$column => $direction];
         }
 
         public function getOrderBy() {
@@ -144,14 +144,14 @@
             }
 
             $orderBy = $this->getOrderBy();
-            if ($orderBy && $orderBy->count() != 0) {
+            if ($orderBy && count($orderBy) != 0) {
                 $query = $query . "ORDER BY ";
 
                 $index = 0;
                 foreach ($orderBy as $column => $direction) {
                     $direction = strtoupper($direction);
                     $query = $query . "{$column} {$direction}";
-                    if (++$index != $orderBy->count()) $query = $query . ",";
+                    if (++$index != count($orderBy)) $query = $query . ",";
                     else $query = $query . "\n";
                 }
             }
