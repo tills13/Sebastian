@@ -10,18 +10,35 @@
      * @since Oct. 2015
      */
     class Utils {
-        public static function startsWith($haystack, $needle, $regex = false) {
-            if ($needle == null) return false;
+        public static function startsWith($haystack, $needles, $regex = false) {
+            if ($needles == null) return false;
+            if (!is_array($needles)) $needles = [$needles];
 
-            if ($regex) return $needle === "" || preg_match("^{$needle}.*", $haystack);
-            else {
-                return $needle === "" || strrpos($haystack, $needle, -strlen($haystack)) !== false;
+            foreach ($needles as $needle) {
+                if ($regex && ($needle === "" || preg_match("^{$needle}.*", $haystack))) {
+                    return true;
+                } else {
+                    if ($needle === "" || strrpos($haystack, $needle, -strlen($haystack)) !== false) {
+                        return true;
+                    }
+                } 
             }
+
+            return false;
         }
 
-        public static function endsWith($haystack, $needle = null) {
-            if ($needle == null) return false;
-            return $needle === "" || (($temp = strlen($haystack) - strlen($needle)) >= 0 && strpos($haystack, $needle, $temp) !== false);
+        public static function endsWith($haystack, $needles = null) {
+            if ($needles == null) return false;
+            if (!is_array($needles)) $needles = [$needles];
+
+            foreach ($needles as $needle) {
+                if ($needle === "" || (
+                    ($temp = strlen($haystack) - strlen($needle)) >= 0 
+                    && strpos($haystack, $needle, $temp) !== false)
+                ) return true;
+            }
+
+            return false;
         }
 
         public static function ago($time) {

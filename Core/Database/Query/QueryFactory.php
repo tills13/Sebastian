@@ -63,6 +63,16 @@
 
         public function update($table) {
             $this->query = new UpdateQuery();
+            $this->query->setInto($table);
+            return $this;
+        }
+
+        public function set($column, $value) {
+            if ($this->query == null) $this->query = new UpdateQuery();
+            if (!$this->query instanceof UpdateQuery) throw new Exception();
+
+            $this->query->addUpdate($column, ":{$column}");
+            $this->query->addBind($column, $value);
             return $this;
         }
 

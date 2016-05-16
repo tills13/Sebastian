@@ -16,7 +16,6 @@
         protected $requirements;
         protected $weight;
         protected $path;
-        protected $enabled;
         protected $routePrefix;
 
         private $reflection;
@@ -28,13 +27,12 @@
 
             $this->requirements = new Collection();
             $this->weight = 0;
-            $this->enabled = true;
             $this->routePrefix = null;
 
             $this->reflection = new ReflectionClass(get_class($this));
         }
 
-        public function setup() {}
+        public function setup(Configuration $config = null) {}
 
         public function getConfig() {
             return $this->config;

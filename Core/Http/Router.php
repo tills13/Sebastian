@@ -66,13 +66,12 @@
          */
         public function loadRoutes() {
             $components = $this->getContext()->getComponents();
-            $namespace = $this->getContext()->getNamespace();
 
             $paths = [
                 \APP_ROOT . DIRECTORY_SEPARATOR . "../config/routing.yaml", // master routing file, if required
             ]; // add default routes
 
-            $paths = $paths + array_map(function($component) use ($namespace) {
+            $paths = $paths + array_map(function($component) {
                 return $component->getRoutingConfig();
             }, $components);
 
@@ -184,6 +183,7 @@
          */
         public function resolve(Request $request) {
             $components = $this->getContext()->getComponents(true);
+            $context = $this->getContext();
 
             //header("Content-Type: application/json");
             //print(json_encode($this->routes)); die();
@@ -194,25 +194,23 @@
                 preg_match("/^{$route->get('match')}$/", $request->route(), $matches);
 
                 if (count($matches) > 0) {
-                    $namespace = $this->getContext()->getNamespace();
-
                     //$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
 
                     $controller = null;
                     if ($route->has('component')) {
-                        $component = $this->getContext()->getComponent($route->get('component'));
+                        $component = $context->getComponent($route->get('component'));
 
                         if (!$component) continue;
 
                         if ($component->hasController($route['controller'])) {
                             $controller = $component->getController($route['controller']);
-                            $controller = new $controller($this->getContext(), $component);
+                            $controller = new $controller($context->getApplication(), $component);
                         } else continue;
                     } else {
                         foreach ($components as $component) {
                             if ($component->hasController($route['controller'])) {
                                 $controller = $component->getController($route['controller']);
-                                $controller = new $controller($this->getContext(), $component);
+                                $controller = new $controller($context->getApplication(), $component);
                             } else continue;
                         }
 
@@ -234,6 +232,8 @@
                     ]);
                 }
             }
+
+            die();
 
             throw new PageNotFoundException("That page doesn't exist...", 404);
         }

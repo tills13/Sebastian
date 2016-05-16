@@ -45,21 +45,16 @@
         }
 
         public function generateUrl($route = null, $args = []) {
-            return $this->getContext()->getRouter()->generateUrl($route, $args);
+            return $this->getRouter()->generateUrl($route, $args);
         }
 
         public function __call($method, $args) {
             $extension = parent::__call($method, $args);
 
-            if ($extension == null) {
+            if (is_null($extension)) {
                 return $this->context->$method($args);
             }
         }
-
-
-
-
-
 
         public function getCacheManager() {
             return $this->getContext()->getCacheManager();

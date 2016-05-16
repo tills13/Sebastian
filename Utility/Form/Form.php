@@ -136,9 +136,6 @@
             foreach ($this->fields as $name => $field) {
                 $value = $request->get("{$this->getName()}.{$field->getName()}");
                 $field->setValue($value);
-
-                //print ($field->getName() . " ");
-                //print ($value . "<br/>");
             }
 
             $this->submit();

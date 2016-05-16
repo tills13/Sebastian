@@ -18,7 +18,6 @@
                 $path = APP_ROOT . DIRECTORY_SEPARATOR . $path;
             }
 
-            //print ($path); print("<br/>");
 
             if (!file_exists($path)) return null;
 
