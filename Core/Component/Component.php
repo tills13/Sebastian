@@ -95,7 +95,7 @@
         }
 
         public function getNamespacePath() {
-            return str_replace('/', '\\', $this->getNamespace());
+            return str_replace('\\', '/', $this->getNamespace());
         }
 
         public function setRequirements($requirements) {

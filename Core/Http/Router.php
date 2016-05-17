@@ -6,7 +6,7 @@
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Database\EntityManager;
-    use Sebastian\Core\Entity\EntityInterface;
+    use Sebastian\Core\Model\EntityInterface;
     use Sebastian\Core\Exception\PageNotFoundException;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Request;
@@ -232,8 +232,6 @@
                     ]);
                 }
             }
-
-            die();
 
             throw new PageNotFoundException("That page doesn't exist...", 404);
         }

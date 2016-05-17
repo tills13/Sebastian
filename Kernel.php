@@ -70,14 +70,14 @@
                 if (!method_exists($controller, $method)) {
                     throw new SebastianException("The requested method (<strong>{$method}</strong>) doesn't exist", 400);
                 }
-                
+
                 $response = call_user_func_array([$controller, $method], $arguments->toArray());
 
                 if ($response == null || !$response instanceof Response) {
                     throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
             } catch (\Exception $e) {
-                //var_dump($e); die();
+                print($e->getMessage()); die();
                 if ($e instanceof HttpException) {
                     $response = new Response($e->getMessage() ?: get_class($e));
                     $response->setResponseCode($e->getHttpResponseCode());

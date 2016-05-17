@@ -7,8 +7,8 @@
     class YamlLoader extends Loader {
         protected $directory;
 
-        public function load($filename) {
-            $filename = $this->getProperFilename($filename);
+        public function load($filename, $directory = null) {
+            $filename = $this->getProperFilename($filename, $directory);
 
             $this->directory = dirname(realpath($filename));
             $config = yaml_parse_file($filename);

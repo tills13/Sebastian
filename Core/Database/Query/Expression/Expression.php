@@ -6,9 +6,10 @@
         const TYPE_AND = 1;
         const TYPE_OR = 2;
         const TYPE_EQUALS = 3;
-        const TYPE_NOT_EQUALS = 4;
-        const TYPE_GT = 5;
-        const TYPE_LT = 6;
+        const TYPE_IS = 4;
+        const TYPE_NOT_EQUALS = 5;
+        const TYPE_GT = 6;
+        const TYPE_LT = 7;
 
         //const SEPARATOR_AND = " && ";
         //const SEPARATOR_OR = " || ";
@@ -16,11 +17,13 @@
         const SQL_SEPARATOR_AND = " AND ";
         const SQL_SEPARATOR_OR = " OR ";
         const SQL_SEPARATOR_EQUALS = " = ";
+        const SQL_SEPARATOR_IS = " IS ";
         const SQL_SEPARATOR_NOT_EQUALS = " != ";
         
         const SEPARATOR_AND = Expression::SQL_SEPARATOR_AND;
         const SEPARATOR_OR = Expression::SQL_SEPARATOR_OR;
         const SEPARATOR_EQUALS = Expression::SQL_SEPARATOR_EQUALS;
+        const SEPARATOR_IS = Expression::SQL_SEPARATOR_IS;
         const SEPARATOR_NOT_EQUALS = Expression::SQL_SEPARATOR_NOT_EQUALS;
         const SEPARATOR_GT = ">";
         const SEPARATOR_LT = "<";
@@ -34,6 +37,7 @@
             Expression::TYPE_AND => Expression::SEPARATOR_AND,
             Expression::TYPE_OR => Expression::SEPARATOR_OR,
             Expression::TYPE_EQUALS => Expression::SEPARATOR_EQUALS,
+            Expression::TYPE_IS => Expression::SEPARATOR_IS,
             Expression::TYPE_NOT_EQUALS => Expression::SEPARATOR_NOT_EQUALS
         ];
 

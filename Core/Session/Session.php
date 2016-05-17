@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Session;
 
-    use Sebastian\Core\Entity\UserInterface;
+    use Sebastian\Core\Model\UserInterface;
     
     /**
      * Session

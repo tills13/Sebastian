@@ -56,6 +56,13 @@
             return $this;
         }
 
+        public function is($expression) {
+            $this->expression->setType(Expression::TYPE_IS);
+            $this->expression->put($expression);
+
+            return $this;
+        }
+
         public function notEquals($expression) {
             $this->expression->setType(Expression::TYPE_NOT_EQUALS);
             $this->expression->put($expression);
@@ -64,9 +71,13 @@
         }
 
         public function andExpr($expression) {
-            if ($this->expression == null) $this->expression = new Expression(Expression::TYPE_AND);
-            if (!$this->expression->is(Expression::TYPE_AND)) {
+            if ($this->expression == null) {
+                $this->expression = new Expression(Expression::TYPE_AND);
+            }
 
+            // todo
+            if (!$this->expression->is(Expression::TYPE_AND)) {
+                $this->expression->setType(Expression::TYPE_AND);
             }
 
             $this->expression->put($expression);

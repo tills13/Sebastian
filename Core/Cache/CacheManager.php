@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Cache;
 
-    use Sebastian\Core\Entity\EntityInterface;
+    use Sebastian\Core\Model\EntityInterface;
     use Sebastian\Utility\Configuration\Configuration;
 
     /**

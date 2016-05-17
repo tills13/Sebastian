@@ -2,7 +2,7 @@
     namespace Sebastian\Utility\Form;
 
     use Sebastian\Application;
-    use Sebastian\Core\Entity\EntityInterface;
+    use Sebastian\Core\Model\EntityInterface;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Form\Field;
 
