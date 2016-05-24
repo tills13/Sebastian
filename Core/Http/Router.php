@@ -208,9 +208,11 @@
                         } else continue;
                     } else {
                         foreach ($components as $component) {
+                            //print ($component->getName() . " " . $component->hasController($route['controller']));
                             if ($component->hasController($route['controller'])) {
                                 $controller = $component->getController($route['controller']);
                                 $controller = new $controller($context->getApplication(), $component);
+                                break;
                             } else continue;
                         }
 

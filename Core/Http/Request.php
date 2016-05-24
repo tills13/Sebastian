@@ -72,9 +72,9 @@
 
         protected function processBody() {
             try {
-                if ($this->headers->get('HTTP_CONTENT_TYPE') == 'application/json') {
+                if (strstr($this->headers->get('HTTP_CONTENT_TYPE'), 'application/json')) {
                     $this->body = new Collection(json_decode($this->body, true));
-                } 
+                }
             } catch (\Exception $e) {
                 $this->body = [];
             }
