@@ -2,6 +2,7 @@
     namespace Sebastian\Core\Database;
 
     use \PDO;
+    use \PDOException;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Database\Exception\DatabaseException;
     use Sebastian\Core\Database\Statement\PreparedStatement;
@@ -57,12 +58,16 @@
             $driverClassName = $driverClass[1];
 
             $classPath = "\\{$driverNamespace}\\Database\\PDO\\{$driverClassName}";
-            $this->driver = new $classPath(
-                $this, 
-                $this->config->get('username'), 
-                $this->config->get('password'), 
-                $this->config
-            );
+            try {
+                $this->driver = new $classPath(
+                    $this, 
+                    $this->config->get('username'), 
+                    $this->config->get('password'), 
+                    $this->config
+                );
+            } catch (PDOException $e) {
+                $this->driver = null;
+            }
         }
 
         public function __call($name, $arguments) {
@@ -96,6 +101,10 @@
         }
 
         public function prepare($query, array $options = []) {
+            if (!$this->driver) {
+                throw new DatabaseException("Driver has not been set up properly.");
+            }
+
             $ps = $this->driver->prepare($query, $options);
             return $ps;
         }

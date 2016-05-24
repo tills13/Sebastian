@@ -41,21 +41,31 @@
         }
 
         public function boot() {
-            $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
-            $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
-            $this->connection = new Connection($this, $this->config->sub('database'));
+            try {
+                $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
+                $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
+                $this->connection = new Connection($this, $this->config->sub('database'));
 
-            $this->setupComponents();
-            $this->router->loadRoutes();
+                $this->setupComponents();
+                $this->router->loadRoutes();
 
-            if ($this->config->has('application.app_class')) {
-                $namespace = $this->config->get('application.namespace');
-                $appClass = $this->config->get('application.app_class');
-                $applicationPath = "\\{$namespace}\\{$appClass}";
+                if ($this->config->has('application.app_class')) {
+                    $namespace = $this->config->get('application.namespace');
+                    $appClass = $this->config->get('application.app_class');
+                    $applicationPath = "\\{$namespace}\\{$appClass}";
 
-                $this->application = new $applicationPath($this, $this->config);
-            } else {
-                $this->application = new Application($this, $this->config);
+                    $this->application = new $applicationPath($this, $this->config);
+                } else {
+                    $this->application = new Application($this, $this->config);
+                } 
+            } catch (Exception $e) {
+                if ($this->templating) {
+                    return new Response($this->get('templating')->render('exception/exception', [
+                        'exception' => $e
+                    ]));
+                } else {
+                    return new Response($e->getMessage());
+                }
             }
         }
 
