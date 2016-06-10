@@ -12,6 +12,7 @@
         protected $connection;
         protected $config;
         protected $logger;
+        protected $transformer;
 
         public function __construct(Connection $connection, $username, $password, Configuration $config) {
             $this->connection = $connection;
@@ -43,5 +44,13 @@
 
         public function getLogger() {
             return $this->logger;
+        }
+
+        public function setTransformer(TransformerInterface $transformer) {
+            $this->transformer = $transformer;
+        }
+
+        public function getTransformer() {
+            return $this->transformer;
         }
     }

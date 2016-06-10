@@ -5,7 +5,7 @@
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Utility\Utils;
 
-    class Context implements ContextInterface {
+    class Context implements ContextInterface,\ArrayAccess {
         protected $extensions;
 
         public function __construct() {
@@ -28,5 +28,21 @@
 
         public function __set($offset, $value) {
             $this->extensions->set($offset, $value);
+        }
+
+        public function offsetExists($offset) {
+            return $this->extensions->has($offset);
+        }
+
+        public function offsetGet($offset) {
+            return $this->extensions->get($offset);
+        }
+
+        public function offsetSet($offset, $value) {
+            $this->extensions->set($offset, $value);
+        }
+
+        public function offsetUnset($offset) {
+            $this->extensions->remove($offset);
         }
     }

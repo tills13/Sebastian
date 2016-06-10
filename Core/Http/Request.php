@@ -19,9 +19,9 @@
         const METHOD_POST = "POST";
 
         public $body;
+        public $get;
+        public $post;
 
-        protected $get;
-        protected $post;
         protected $route;
         protected $method;
         protected $type;

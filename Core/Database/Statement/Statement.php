@@ -17,8 +17,15 @@
             $this->logger = $pdo->getLogger();
         }
 
-        public function execute($params = []) {
+        public function execute($params = [], $types = []) {
             $startTime = microtime(true);
+
+            if (($transformer = $this->pdo->getTransformer()) !== null) {
+                foreach ($params as &$param) {
+                    $param = $transformer->transformToDBValue($param);
+                }
+            }
+        
             try { parent::execute($params); } catch (PDOException $e) {
                 //$this->logger->info("query failed", "db_log");
                 throw $e;

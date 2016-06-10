@@ -8,6 +8,8 @@
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
     use Sebastian\Core\Database\Connection;
+    use Sebastian\Core\DependencyInjection\Injector;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Configuration\Loader\YamlLoader;
 
@@ -30,7 +32,7 @@
         protected $request;
         protected $router;
 
-        public function __construct($environment) {
+        public function __construct($environment = "prod") {
             parent::__construct();
 
             $this->components = [];
@@ -38,9 +40,18 @@
             $this->environment = $environment;
             $this->request = Request::fromGlobals();
             $this->router = Router::getRouter($this);
+
+            Injector::init([
+                '@request' => $this->request,
+                '@Request' => $this->request,
+                '@router' => $this->router,
+                '@Router' => $this->router,
+            ]);
         }
 
         public function boot() {
+            ClassMapper::init($this->getComponents());
+
             try {
                 $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
                 $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
@@ -57,7 +68,7 @@
                     $this->application = new $applicationPath($this, $this->config);
                 } else {
                     $this->application = new Application($this, $this->config);
-                } 
+                }
             } catch (Exception $e) {
                 if ($this->templating) {
                     return new Response($this->get('templating')->render('exception/exception', [
@@ -130,7 +141,8 @@
         }
 
         public function registerComponent(Component $component) {
-            $this->components[strtolower($component->getName())] = $component;
+            $this->components[$component->getName()] = $component;
+            $this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
         }
 
         public function setupComponents() {

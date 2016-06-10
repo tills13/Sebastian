@@ -99,6 +99,8 @@
         ];
 
         public function getDatabaseType($phpType) {
+            if (!isset($this->phpTypesToPostgresTypes[$phpType])) return null;
+
             return $this->phpTypesToPostgresTypes[$phpType];
         }
 
@@ -131,6 +133,8 @@
             if ($dbType == 'timestamp') {
                 if (!$value instanceof \DateTime) $value = new \DateTime($value);
                 $value = $value->format('Y-m-d g:i:s');
+            } else if ($dbType == 'boolean' || $dbType == 'bool') {
+                $value = $value ? "TRUE" : "FALSE";
             }
 
             return $value;

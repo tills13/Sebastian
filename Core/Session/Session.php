@@ -14,7 +14,7 @@
     class Session {
         protected $cookies;
 
-        public function fromGlobals() {
+        public static function fromGlobals() {
             $session = new Session();
             return $session;
         }
@@ -25,7 +25,7 @@
             $token = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
             
             $this->set('session_token', $token);
-            $this->set('session_user', @$_SESSION['user']); // needed?
+            $this->set('session_user', $_SESSION['user'] ?? null); // needed?
 
             if (!$token && !is_null($this->get('session_user', null))) {
                 $user = $this->get('session_user');

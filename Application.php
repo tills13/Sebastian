@@ -3,6 +3,7 @@
 
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
+    use Sebastian\Core\DependencyInjection\Injector;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Router;
@@ -11,10 +12,11 @@
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Templating\SRender;
 
-    use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     //use Sebastian\Utility\Logger\Logger;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
     use Sebastian\Utility\Utility\Utils;
 
     /**
@@ -35,6 +37,8 @@
             $this->kernel = $kernel;
             $this->config = $config;
             $this->exceptionHandlers = [];
+
+            $this->registerServices();
         }
 
         public function __call($method, $args) {
@@ -58,7 +62,6 @@
         }
 
         public function preHandle() {
-            $this->registerServices();
         }
 
         public function shutdown(Request $request, Response $response) {
@@ -69,35 +72,17 @@
             $this->exceptionHandlers[] = $handler;
         }
 
-        /*public function checkComponentRequirements() {
-            $context = $this;
-            $this->components = array_filter($this->getComponents(true), function($component) use ($context) {
-                return $component->checkRequirements($context);
-            });
-
-            foreach ($this->components as $component) $component->setup();
-        }*/
-
         public function registerServices() {
-            $services = $this->config->sub('service');
+            $services = $this->config->sub('services');
 
-            foreach ($services as $key => $serviceDefinition) {
-                $params = $serviceDefinition->get('params');
-                $class = $serviceDefinition->get('class');
+            foreach ($services as $key => $service) {
+                if (!$service->has('class')) continue;
 
-                if (strpos($class, ':') >= 0) {
-                    $class = explode(':', $class);
-                    $component = $this->getComponent($class[0]);
-                    $class = $class[1];
-
-                    $classPath = "\\{$this->getNamespace()}\\{$component->getNamespacePath()}\\{$class}";
-                    $service = new $classPath();
-                } else {
-
-                }
-
-                $service->boot();
-                $this->services[$key] = $service;
+                $class = $service->get('class');
+                $class = ClassMapper::parse($class);
+                
+                $service = Injector::create($class);
+                $this["service.{$key}"] = $service;
             }
         }
 
@@ -126,10 +111,6 @@
 
         public function getRequest() {
             return $this->kernel->getRequest();
-        }
-
-        public function getService($name) {
-            return isset($this->services[$name]) ? $this->services[$name] : null;
         }
 
         public function getDefaultLogPath() {
