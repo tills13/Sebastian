@@ -1,9 +1,12 @@
 <?php
     namespace Sebastian\Core\Database\PDO;
 
+    use \PDOException;
+
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\Statement\Statement;
     use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Core\Database\Exception\UniqueConstraintException;
     use Sebastian\Core\Database\Transformer\PostgresTransformer;
 
     class PostgresPDO extends SebastianPDO {
@@ -12,5 +15,13 @@
             $this->setTransformer(new PostgresTransformer($connection));
 
             parent::__construct($connection, $username, $password, $config);
+        }
+
+        public function convertException(PDOException $e) {
+            $code = $e->getCode();
+
+            if ($code == 23505) {
+                return new UniqueConstraintException("Unique constraint violation", $code, $e);
+            }
         }
     }

@@ -1,7 +1,8 @@
 <?php
     namespace Sebastian\Core\Database\PDO;
 
-    use \PDO as PDO;
+    use \PDO;
+    use \PDOException;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\Database\Statement\Statement;
     use Sebastian\Core\Database\Transformer\TransformerInterface;
@@ -37,6 +38,8 @@
         public function getDriverName() {
             return $this->driverName;
         }
+
+        public abstract function convertException(PDOException $e); 
 
         public function setLogger(Logger $logger) {
             $this->logger = $logger;
