@@ -27,8 +27,7 @@
             }
         
             try { parent::execute($params); } catch (PDOException $e) {
-                //$this->logger->info("query failed", "db_log");
-                throw $e;
+                throw $this->pdo->convertException($e);
             }
 
             $diff = microtime(true) - $startTime;

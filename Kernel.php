@@ -103,7 +103,7 @@
                 $response = call_user_func_array([$controller, $method], $arguments->toArray());
 
                 if ($response == null || !$response instanceof Response) {
-                    throw new SebastianException("Controller must return a response.", 1);
+                    //throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
             } catch (\Exception $e) {
                 $request = $this->getRequest();
