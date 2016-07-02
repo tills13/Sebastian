@@ -14,7 +14,7 @@
             $this->message = $message;
         }
 
-        public static function notFoundException($message = null) {
+        public static function notFoundException($message = "Not Found") {
             return new HttpException($message ?: $message, Response::HTTP_NOT_FOUND);
         }
 

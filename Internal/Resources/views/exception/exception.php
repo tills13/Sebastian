@@ -1,11 +1,19 @@
+<?php
+    $preMessage = "";
+
+    foreach ($exception->getTrace() as $index => $trace) {
+        $preMessage .= "#{$index} " . ($trace['file'] ?? "(No File)") . " (" . ($trace['line'] ?? "--") . ")\n";
+    }
+?>
+
 <?=$this->extend('master')?>
 
+<?=$this->block('title', get_class($exception))?>
+
 <?=$this->block('body')?>
-<div>
-    <h2>Something Went Wrong... <small><?=get_class($exception)?></small></h2>
-    <b><?=$exception->getMessage()?></b>
-    <pre><?php foreach ($exception->getTrace() as $index => $trace) { 
-            echo("#{$index} {$trace['file']}({$trace['line']})\n");
-        } ?></pre>
-</div>
+    <div>
+        <h2><?=$exception->getMessage()?><br/><small><?=get_class($exception)?></small></h2>
+        <hr/>
+        <pre><?=$preMessage?></pre>
+    </div>
 <?=$this->endBlock()?>

@@ -14,6 +14,9 @@
     use Sebastian\Utility\Configuration\Loader\YamlLoader;
 
     use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Http\Exception\HttpException;
+    use Sebastian\Core\Http\Firewall;
+    use Sebastian\Core\Http\Response\JsonResponse;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Router;
@@ -51,6 +54,7 @@
 
         public function boot() {
             ClassMapper::init($this->getComponents());
+            Firewall::init($this);
 
             try {
                 $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
@@ -81,6 +85,10 @@
         }
 
         public function handle(Request $request) {
+            if ($response = Firewall::handle($request) instanceof Response) {
+                return $response;
+            }
+
             try {
                 $resolved = $this->router->resolve($request);
 
@@ -89,7 +97,7 @@
                 $arguments = $resolved->get('arguments');
 
                 if (!method_exists($controller, $method)) {
-                    throw new SebastianException("The requested method (<strong>{$method}</strong>) doesn't exist", 400);
+                    throw new SebastianException("The requested method (<strong>{$controller}:{$method}</strong>) doesn't exist", 400);
                 }
 
                 $response = call_user_func_array([$controller, $method], $arguments->toArray());
@@ -98,24 +106,18 @@
                     throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
             } catch (\Exception $e) {
-                print($e->getMessage()); die();
-                if ($e instanceof HttpException) {
-                    $response = new Response($e->getMessage() ?: get_class($e));
-                    $response->setResponseCode($e->getHttpResponseCode());
-                    return $response;
-                } else {
-                    $request = $this->getRequest();
+                $request = $this->getRequest();
 
-                    if ($request->isXmlHttpRequest()) {
-                        $code = ($e instanceof HttpException) ? $e->getHttpResponseCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
-                        return new JsonResponse([
-                            'error' => $e->getMessage()
-                        ], $code);
-                    } else {
-                        return new Response($this->get('templating')->render('exception/exception', [
-                            'exception' => $e
-                        ]));
-                    }
+                if ($request->isXmlHttpRequest() || strpos($request->route(), '/api/') === 0) {
+                    $code = ($e instanceof HttpException) ? $e->getHttpResponseCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
+                    return new JsonResponse([
+                        'error' => $e->getMessage(),
+                        'code' => $code
+                    ], $code);
+                } else {
+                    return new Response($this->get('templating')->render('exception/exception', [
+                        'exception' => $e
+                    ]));
                 }
             }
         }
@@ -166,6 +168,10 @@
 
         public function getComponents() {
             return $this->components;
+        }
+
+        public function getConfig() {
+            return $this->config;
         }
 
         public function getEnvironment() {

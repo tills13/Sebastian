@@ -7,8 +7,8 @@
     use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Database\EntityManager;
     use Sebastian\Core\Model\EntityInterface;
-    use Sebastian\Core\Exception\PageNotFoundException;
     use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Session\Session;
     use Sebastian\Utility\Collection\Collection;
@@ -235,7 +235,7 @@
                 }
             }
 
-            throw new PageNotFoundException("That page doesn't exist...", 404);
+            throw HttpException::notFoundException();
         }
 
         /**
@@ -290,9 +290,11 @@
         }
 
         public function generateUrl($name, $args = []) {
-            //var_dump($name); die();
             $route = $this->getRoute($name);
-            if (!$this->getRoute($name)) throw new SebastianException("Route {$name} does not exist.");
+
+            if (!$this->getRoute($name)) {
+                throw new SebastianException("Route {$name} does not exist.");
+            }
             
             $mRoute = $route['route'];
 
@@ -305,7 +307,10 @@
                 }
             }
 
-            if (count($args) > 0) $mRoute .= "?" . http_build_query($args);
+            if (count($args) > 0) {
+                $mRoute .= "?" . http_build_query($args);
+            }
+            
             return $mRoute;
         }
     }

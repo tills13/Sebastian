@@ -91,29 +91,24 @@
             setcookie($field, $value, $expires);
         }
 
-        public function setUser(UserInterface $user) {
-            $this->set('session_user', $user);
-            return $this;
-        }
-
-        // GETTERS ====
-        
         public function getCookie($field, $default = null) {
             return isset($_COOKIE[$field]) ? $_COOKIE[$field] : $default;
+        }
+
+        public function setToken(string $token) {
+            $this->set('token', $token);
         }
 
         public function getToken() {
             return $this->get('session_token');
         }
 
-        public function getUser() {
-            return $this->get('session_user');
+        public function setUser(UserInterface $user) {
+            $this->set('session_user', $user);
+            return $this;
         }
 
-        public function getNotices($destroy = true) {
-            $notices = $this->get('session_notices', []);
-            if ($destroy) $this->clear('session_notices');
-
-            return $notices;
+        public function getUser() {
+            return $this->get('session_user');
         }
     }
