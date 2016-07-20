@@ -17,6 +17,5 @@
         public function send() {
             $this->sendHttpResponseCode();
             $this->sendHeaders();
-            // die(); ?? maybe
         }
     }

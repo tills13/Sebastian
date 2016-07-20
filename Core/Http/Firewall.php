@@ -24,18 +24,17 @@
 
             if (($token = $request->get('token') ?? (empty($request->body) || (!$request->body instanceof Collection) ? null : $request->body->get('token'))) && !$session->check()) {
                 $em = self::$context->getEntityManager();
-                $userRepo = $em->getRepository($config->get('firewall.user_interface_class'));
+                $userRepo = $em->getRepository($config->get('firewall.user_class'));
                 $user = $userRepo->find([ 'token' => $token ]);
 
-                if ($user !== null && is_array($user) && count($user) == 1) {
-                    $user = $user[0];
-                    $session->setUser($user);
+                if ($user !== null && is_array($user) && count($user) === 1) {
+                    $session->setUser($user[0]);
                 } else {
-                    throw new Exception("invalid token {$token}");
+                    throw new Exception("Invalid token {$token}");
                 }
             }
 
-            foreach (Firewall::$listeners as $listener) {
+            foreach (Firewall::$listeners as $index => $listener) {
                 if ($response = $listener($request) instanceof Response) {
                     return $response;
                 }
