@@ -19,6 +19,6 @@
         }
 
         public function load($key) {
-            return new \StdClass();
+            return null;
         }
     }

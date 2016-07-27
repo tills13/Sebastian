@@ -12,6 +12,16 @@
             $this->setWeight(0);
         }
 
+        public function setup(Configuration $config = null) {
+            $context = $this->getContext();
+
+            if ($templating = $this->getContext()->get('templating')) {
+                $context->templating->addMacro('sebastian', function() use ($templating) {
+                    return $templating->render('javascript');
+                });
+            }
+        }
+
         public function checkRequirements(ContextInterface $context) {
             return true;
         }

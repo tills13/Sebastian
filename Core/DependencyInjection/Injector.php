@@ -28,6 +28,10 @@
             return $reflection->newInstanceArgs($dependencies);
         }
 
+        public static function resolveClass() {
+            
+        }
+
         public static function resolveMethod(ReflectionMethod $method) {
             $parameters = ($method == null) ? [] : $method->getParameters();
 

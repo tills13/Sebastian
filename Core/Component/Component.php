@@ -10,9 +10,9 @@
     use \ReflectionClass;
 
     abstract class Component {
+        protected $config;
         protected $context;
         protected $name;
-        protected $config;
         protected $requirements;
         protected $weight;
         protected $path;
@@ -21,13 +21,12 @@
         private $reflection;
 
         public function __construct(ContextInterface $context, $name, Configuration $config = null) {
+            $this->config = $config ?? new Configuration();
             $this->context = $context;
             $this->name = $name;
-            $this->config = $config ?: new Configuration();
-
             $this->requirements = new Collection();
-            $this->weight = 0;
             $this->routePrefix = null;
+            $this->weight = 0;
 
             $this->reflection = new ReflectionClass(get_class($this));
         }

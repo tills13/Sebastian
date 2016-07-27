@@ -18,4 +18,6 @@
         abstract public function invalidate($key);
         abstract public function isCached($key);
         abstract public function load($key);
+        abstract public function getInfo();
+        abstract public function getMemInfo();
     }

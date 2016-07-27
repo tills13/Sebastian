@@ -35,7 +35,11 @@
         }
 
         public function getColumnType($column) {
-            //if (is_string($column)) $column = 
+            if (!is_string($column)) {
+                //$column = $this->
+            } 
+
+            return $this->getColumnMeta($column); 
         }
 
         public function fetchAll($fetchStyle = PDO::FETCH_ASSOC, $className = null, $ctorArgs = null) {

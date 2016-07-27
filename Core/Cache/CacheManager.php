@@ -95,12 +95,20 @@
             return $this->driver->load($key);
         }
 
+        public function setDriver(Driver $driver) {
+            $this->driver = $driver;
+        }
+        
         public function getDriver() {
             return $this->driver;
         }
 
-        public function setDriver(Driver $driver) {
-            $this->driver = $driver;
+        public function getInfo() {
+            return $this->driver->getInfo();
+        } 
+
+        public function getMemInfo() {
+            return $this->driver->getMemInfo();
         }
 
         public function generateKey($thing) {

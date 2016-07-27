@@ -51,4 +51,12 @@
         public function getCache() {
             return $this->cache;
         }
+
+        public function getInfo() {
+            return [];
+        }
+
+        public function getMemInfo() {
+            return [];
+        }
     }

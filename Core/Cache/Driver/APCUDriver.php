@@ -30,4 +30,12 @@
             if (!$success) throw new CacheException("failed to load {$key} from cache");
             return $object;
         }
+
+        public function getInfo() {
+            return apcu_cache_info();
+        }
+
+        public function getMemInfo() {
+            return apcu_sma_info();
+        }
     }

@@ -10,12 +10,12 @@
         protected static $listeners;
 
         public static function init(ContextInterface $context) {
-            Firewall::$context = $context;
-            Firewall::$listeners = [];
+            self::$context = $context;
+            self::$listeners = [];
         }
 
         public static function addListener(Callable $listener) {
-            Firewall::$listeners[] = $listener;
+            self::$listeners[] = $listener;
         }
 
         public static function handle(Request &$request) {
@@ -34,7 +34,7 @@
                 }
             }
 
-            foreach (Firewall::$listeners as $index => $listener) {
+            foreach (self::$listeners as $index => $listener) {
                 if ($response = $listener($request) instanceof Response) {
                     return $response;
                 }

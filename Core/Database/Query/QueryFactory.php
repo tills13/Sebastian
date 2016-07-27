@@ -153,7 +153,7 @@
             return $this;
         }
 
-        public function orderBy($column, $direction) {
+        public function orderBy($column, $direction = 'DESC') {
             $this->query->addOrderBy($column, $direction);
             return $this;
         }
