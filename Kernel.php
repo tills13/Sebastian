@@ -53,11 +53,12 @@
         }
 
         public function boot() {
+            $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
+            
             ClassMapper::init($this->getComponents());
-            Firewall::init($this);
+            Firewall::init($this, $this->config->sub('firewall', []));
 
             try {
-                $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
                 $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
                 $this->connection = new Connection($this, $this->config->sub('database'));
 
