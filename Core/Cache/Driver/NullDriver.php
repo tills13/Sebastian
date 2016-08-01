@@ -21,4 +21,12 @@
         public function load($key) {
             return null;
         }
+
+        public function getInfo() {
+            return [];
+        }
+
+        public function getMemInfo() {
+            return [];
+        }
     }
