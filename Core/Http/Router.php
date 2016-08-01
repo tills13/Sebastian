@@ -1,276 +1,316 @@
-<?php 	
-	namespace Sebastian\Core\Http;
+<?php   
+    namespace Sebastian\Core\Http;
 
-	use Sebastian\SEBASTIAN_ROOT;
-	use Sebastian\Core\Exception\PageNotFoundException;
+    use Sebastian\SEBASTIAN_ROOT;
 
-	use Sebastian\Core\Entity\Entity;
-	use Sebastian\Core\Context\Context;
-	use Sebastian\Core\Database\EntityManager;
-	use Sebastian\Core\Http\Request;
-	use Sebastian\Core\Session\Session;
+    use Sebastian\Core\Component\Component;
+    use Sebastian\Core\Context\ContextInterface;
+    use Sebastian\Core\Database\EntityManager;
+    use Sebastian\Core\Model\EntityInterface;
+    use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Http\Exception\HttpException;
+    use Sebastian\Core\Http\Request;
+    use Sebastian\Core\Session\Session;
+    use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Utility\Utils;
 
-	use Sebastian\Core\Utility\Logger;
-	use Sebastian\Core\Utility\Utils;
-	
-	/**
-	 * Router
-	 *
-	 * various methods for adding and resolving routes. 
-	 * 
-	 * @author Tyler <tyler@sbstn.ca>
-	 * @since Oct. 2015
-	 */
-	class Router {
-		public static $tag = "ROUTER";
-		public $routes;
-
-		protected $context;
-		protected static $logger;
-
-		/**
-		 * attempts to load the router (plus routes) from cache, if it's not
-		 * cached, load it normally
-		 * 
-		 * @param  Kernel $context application context
-		 * @return Router the router
-		 */
-		public static function getRouter($context) {
-			$router = new Router($context);
-			$router->init($context);
-
-			$cm = $context->getCacheManager();
-			$cm->clear();
-
-			if ($cm->isCached($router)) {
-				$router = $cm->load($router);
-				$router->setContext($context); 
-			} else {
-				$router->loadRoutes();
-				$cm->cache($router);
-			}
-
-			return $router;
-		}
-
-		protected function __construct($context) {}
-
-		/**
-		 * initialize the router object
-		 * @param  Kernel $app the application context, this should eventually be Application
-		 * @return void
-		 */
-		public function init($app) {
-			if (!Router::$logger) {
-				Router::$logger = new Logger($app->getLogFolder(), null, ['filename' => 'routing']);
-				Router::$logger->setTag(Router::$tag);
-			}
-
-			$this->routes = [];
-			$this->em = $app->getEntityManager();
-			$this->cm = $app->getCacheManager();
-			$this->context = $app;
-		}
-
-		/**
-		 * load routes from the various routing files in component roots.
-		 * @return void
-		 */
-		public function loadRoutes() {
-			$components = $this->getContext()->getComponents();
-			$namespace = $this->getContext()->getAppNamespace();
-
-			$paths = [
-				\APP_ROOT . "/config/routing.yaml", // master routing file, if required
-				SEBASTIAN_ROOT . "/Core/Resources/config/routing.yaml" // internal for css/js/font/assets
-			]; // add default routes
-
-			$paths = $paths + array_map(function($component) use ($namespace) {
-				return \APP_ROOT."/{$namespace}{$component['path']}/routing.yaml";
-			}, $components);
-
-			foreach ($paths as $index => $path) {
-				if (!file_exists($path)) {
-					Router::$logger->info("skipping non-existent file {$path}");
-					continue;
-				}
-
-				$startTime = microtime(true);
-				$routes = yaml_parse_file($path);
-
-				if (!$routes) {
-					Router::$logger->info("skipping empty file {$path}");
-					continue;
-				}
-
-				foreach ($routes as $name => $route) {
-					$this->addRoute(
-						$name,
-						$route['route'], 
-						$route['controller'],
-						$route['method'],
-						array_values($route['methods'])
-					);
-				}
-
-				$count = count($routes);
-				$time = microtime(true) - $startTime;
-
-				Router::$logger->info("loaded {$count} routes from disk in {$time} µseconds");
-			}
-		}
-		
-		/**
-		 * add a route to the router
-		 * @param string $name       the name of the route
-		 * @param string $route      the route definition
-		 * @param string $controller the controller defined by the route
-		 * @param string $method     the method in the controller to be used
-		 * @param array $methods     [get,post]
-		 */
-		public function addRoute($name, $route, $controller, $method, $methods) {
-			$methods = $methods ?: ['get','post'];
-
-			preg_match_all('/\{([^:\/]*?)(?:\:[^\/]*?)?\}/', $route, $args);
-			array_shift($args); // get rid of the full string
-			$args = $args[0]; // weird embedded array shit
-
-			if (strstr($controller, ':')) {
-				$components = explode(':', $controller);	 
-				$component = $components[0];
-				$controller = $components[1];
-			} else $component = null;
-			
-			$this->routes[Utils::sanitize($name)] = [
-				'match' => $route,
-				'component' => $component,
-				'controller' => $controller,
-				'method' => $method,
-				'args' => $args,
-				'methods' => $methods
-			];
-		}
-
-		/**
-		 * parse a route from its raw definition into regex
-		 * @param  string $route the route definition
-		 * @return string the regex'd route
-		 */
-		public function parseRoute($route) {
-			$route = preg_replace('/\//', '\/', $route);
-			$parsedRoute = preg_replace_callback('/\{([^:]*?)(?:\:(.*?))?\}/', function($matches) {
-				$type = $matches[2];
-				if (!$type) $type = 'string';
-
-				if ($type === 'string') {
-					return "(?P<{$matches[1]}>[^\/]*)";
-				} else if ($type === 'int') {
-					return "(?P<{$matches[1]}>\d*)";
-				}
-			}, $route, -1, $count);
-
-			if ($count == 0) $parsedRoute = $route;
-
-			$parsedRoute = $parsedRoute . "(?:\/p(?P<page>\d+))?"; //. "(?:\?.*)?";
-
-			return $parsedRoute;
-		}
-
-		/**
-		 * resolve a request, returning the controller, method, and arguments
-		 * 
-		 * @param  Request $request the request
-		 * @return array the controller, method, and arguments
-		 */
-		public function resolve(Request $request) {
-			$mRoute = $request->route();
-			$components = $this->getContext()->getComponents(true);
-			
-			Router::$logger->info("resolving: {$mRoute}");
-
-			foreach ($this->routes as $index => $route) {
-				$route['methods'] = array_map(function($value) { 
-					return strtoupper($value); 
-				}, $route['methods']);
-
-				if (!in_array($request->method(), $route['methods'])) continue;
-
-				$parsedRoute = $this->parseRoute($route['match']);
-				$numMatches = preg_match("/^{$parsedRoute}$/", $mRoute, $matches);
-
-				if ($numMatches > 0) {
-					$namespace = $this->getContext()->getAppNamespace();
-					if (isset($route['component'])) {
-						$controller = "\\{$namespace}\\{$route['component']}\\Controller\\".$route['controller'];
-					} else {
-						foreach ($components as $component) {
-							$path = str_replace('/', '\\', $component['path']);
-							$controller = "\\{$namespace}{$path}\\Controller\\".$route['controller'];	
-							$path = \APP_ROOT.'/'.str_replace('\\', '/', $controller).'.php';
-
-							if (file_exists($path)) break;
-						}
-					}
-
-					$method = $route['method'].'Action';
-					$mMethod = new \ReflectionMethod($controller, $method);
-
-					$parameters = $mMethod->getParameters();
-					$args = $this->parseArgs($matches, $parameters, $request);
-
-					Router::$logger->info("matched: {$route['match']} -> {$parsedRoute}");
-					Router::$logger->info("\t\t_c: {$controller}");
-					Router::$logger->info("\t\t_m: {$method}");
-
-					return [$controller, $method, $args];
-				}
-			}
-
-			Router::$logger->error("could not find route for: {$mRoute}");
-			throw new PageNotFoundException("That page doesn't exist...", 404);
-		}
-
-		protected function parseArgs($attributes, $parameters, $request) {
-			$arguments = [];
-			foreach ($parameters as $param) {
-				$class = $param->getClass() ? $param->getClass()->getName() : null;
-
-				if (array_key_exists($param->name, $attributes)) {
-					if ($class) {
-						$repo = $this->em->getRepository($this->em->getBestGuessClass($class));
-						// todo fix me to not just use id
-						// something like $repo->getAvailabled keys ??????
-						$attributes[$param->name] = $repo->get(['id' => $attributes[$param->name]]);
-					}
-
-					$arguments[$param->name] = $attributes[$param->name];
-				} elseif ($class == Request::class) {
-					$arguments['request'] = $request;
-				} elseif ($class == Session::class) {
-					$arguments['session'] = $this->getContext()->getSession();
-				} elseif ($param->name === 'page') {
-					$arguments['page'] = $attributes['page'] ?: 1;
-				} elseif ($param->isDefaultValueAvailable()) {
-					$arguments[$param->name] = $param->getDefaultValue();
-				} else {
-					throw new \Exception("No param set for {$param->name} {$request->route()}");
-				}
-			}
-
-			$arguments['page'] = @$arguments['page'] ?: @$attributes['page'] ?: 1;
+    use \ReflectionClass;
     
-    		return $arguments;
-		}
+    /**
+     * Router
+     *
+     * various methods for adding and resolving routes. 
+     * 
+     * @author Tyler <tyler@sbstn.ca>
+     * @since Oct. 2015
+     */
+    class Router {
+        public static $tag = "ROUTER";
+        protected static $router;
 
-		public function getRoutes() {
-			return $this->routes;
-		}
+        protected $routes;
+        protected $context;
 
-		public function getContext() {
-			return $this->context;
-		}
+        /**
+         * attempts to load the router (plus routes) from cache, if it's not
+         * cached, load it normally
+         * 
+         * @param  Kernel $context application context
+         * @return Router the router
+         */
+        public static function getRouter(ContextInterface $context) {
+            if (self::$router == null) {
+                self::$router = new Router($context);
+            }
 
-		public function setContext($context) {
-			$this->context = $context;
-		}
-	}
+            return self::$router;
+        }
+
+        protected function __construct($context) {
+            $this->context = $context;
+            $this->routes = new Collection();
+
+            $this->em = $context->getEntityManager();
+            $this->cm = $context->getCacheManager();
+            ////$this->logger = $context->getLogger();
+        }
+
+        public function attachComponent(Component $component) {
+            $prefix = $component->getRoutePrefix();
+        }
+
+        /**
+         * load routes from the various routing files in component roots.
+         * @return void
+         */
+        public function loadRoutes() {
+            $components = $this->getContext()->getComponents();
+
+            $paths = [
+                \APP_ROOT . DIRECTORY_SEPARATOR . "../config/routing.yaml", // master routing file, if required
+            ]; // add default routes
+
+            $paths = $paths + array_map(function($component) {
+                return $component->getRoutingConfig();
+            }, $components);
+
+            foreach ($paths as $index => $path) {
+                if (!file_exists($path)) continue;
+
+                $startTime = microtime(true);
+                $routes = Configuration::fromPath($path);
+
+                if (!$routes || $routes->count() == 0) continue;
+
+                foreach ($routes as $name => $mRoute) {
+                    if ($mRoute->has('type') || $mRoute->get('type') == 'group') {
+                        $this->addRouteGroup($name, $mRoute);
+                    } else {
+                        // required fields
+                        $route = $mRoute->get('route');
+                        $controller = $mRoute->get('controller');
+                        $method = $mRoute->get('method');
+
+                        // optional
+                        $methods = $mRoute->get('methods', ['GET', 'POST']);
+                        $requirements = $mRoute->get('requirements', []);
+
+                        $this->addRoute($name, $route, $controller, $method, $requirements, $methods);
+                    }
+                }
+
+                $count = count($routes);
+                $time = microtime(true) - $startTime;
+            }
+        }
+
+        public function addRouteGroup($groupName, $group) {
+            $baseRoute = $group->get('route');
+
+            foreach ($group->sub('routes') as $name => $mRoute) {
+                $mName = "{$groupName}:{$name}";
+                
+                $route = $baseRoute . $mRoute->get('route');
+                $controller = $mRoute->get('controller');
+                $method = $mRoute->get('method');
+
+                // optional
+                $methods = $mRoute->get('methods', ['GET', 'POST']);
+                $requirements = $mRoute->get('requirements', []);
+
+                $this->addRoute($mName, $route, $controller, $method, $requirements, $methods);
+            }
+        }
+        
+        /**
+         * add a route to the router
+         * @param string $name       the name of the route
+         * @param string $route      the route definition
+         * @param string $controller the controller defined by the route
+         * @param string $method     the method in the controller to be used
+         * @param array $methods     [get,post]
+         */
+        public function addRoute($name, $route, $controller, $method, $requirements, $methods = null) {
+            $methods = ($methods !== null) ? array_map(function($value) { 
+                return strtoupper($value); 
+            }, $methods) : ['GET','POST'];
+
+            if (strstr($controller, ':')) {
+                $components = explode(':', $controller);     
+                $component = $components[0];
+                $controller = $components[1];
+            } else $component = null;
+            
+            $this->routes->set($name, [
+                'match' => $this->generateRouteRegex($route, $requirements),
+                'route' => $route,
+                'component' => $component,
+                'controller' => $controller,
+                'method' => $method,
+                'methods' => $methods
+            ]);
+        }
+
+        /**
+         * parse a route from its raw definition into regex
+         * @param  string $route the route definition
+         * @return string the regex'd route
+         *
+         * @todo  validate regex?????
+         */
+        public function generateRouteRegex($route, $requirements) {
+            $route = preg_replace('/\//', '\/', $route);
+
+            $parsedRoute = preg_replace_callback('/\{([^:]*?)(?:\:(.*?))?\}/', function($matches) use ($requirements) {
+                $param = $matches[1];
+                $type = count($matches) >= 3 ? $matches[2] : "string"; 
+
+                if (isset($requirements[$param])) return "(?P<{$matches[1]}>{$requirements[$param]})";
+
+                if (in_array($type, ['text', 'string'])) return "(?P<{$param}>[^\/]+)";
+                else if (in_array($type, ['int', 'number', 'integer'])) return "(?P<{$param}>\d+)";
+            }, $route, -1, $count);
+
+            return "$parsedRoute\/?";
+        }
+
+        /**
+         * resolve a request, returning the controller, method, and arguments
+         * 
+         * @param  Request $request the request
+         * @return array the controller, method, and arguments
+         */
+        public function resolve(Request $request) {
+            $components = $this->getContext()->getComponents(true);
+            $context = $this->getContext();
+
+            //header("Content-Type: application/json");
+            //print(json_encode($this->routes)); die();
+
+            foreach ($this->routes as $index => $route) {
+                if (!in_array($request->method(), $route['methods'])) continue;
+
+                preg_match("/^{$route->get('match')}$/", $request->route(), $matches);
+
+                if (count($matches) > 0) {
+                    //$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
+
+                    $controller = null;
+                    if ($route->has('component')) {
+                        $component = $context->getComponent($route->get('component'));
+
+                        if (!$component) continue;
+
+                        if ($component->hasController($route['controller'])) {
+                            $controller = $component->getController($route['controller']);
+                            $controller = new $controller($context->getApplication(), $component);
+                        } else continue;
+                    } else {
+                        foreach ($components as $component) {
+                            //print ($component->getName() . " " . $component->hasController($route['controller']));
+                            if ($component->hasController($route['controller'])) {
+                                $controller = $component->getController($route['controller']);
+                                $controller = new $controller($context->getApplication(), $component);
+                                break;
+                            } else continue;
+                        }
+
+                        if (!$controller) continue;
+                    }
+
+                    //$this->logger->info("using controller $controller");
+
+                    $method = $route->get('method') . 'Action';
+                    $reflection = new \ReflectionMethod($controller, $method);
+
+                    $parameters = $reflection->getParameters();
+                    $args = $this->parseArgs($matches, $parameters, $request);
+
+                    return new Collection([
+                        'controller' => $controller, 
+                        'method' => $method, 
+                        'arguments' => $args
+                    ]);
+                }
+            }
+
+            throw HttpException::notFoundException();
+        }
+
+        /**
+         * [parseArgs description]
+         * @param  [type] $attributes [description]
+         * @param  [type] $parameters [description]
+         * @param  [type] $request    [description]
+         * @return [type]             [description]
+         *
+         * @todo  when fetching an entity, don't just assume it's 'id'
+         */
+        protected function parseArgs($attributes, $parameters, $request) {
+            $arguments = new Collection();
+
+            foreach ($parameters as $param) {
+                $class = $param->getClass() ? $param->getClass()->getName() : null;
+
+                if (array_key_exists($param->name, $attributes)) {
+                    if ($class) {
+                        $repo = $this->em->getRepository($this->em->getBestGuessClass($class));
+                        $value = $repo->get(['id' => $attributes[$param->name]]);
+                    } else {
+                        $value = $attributes[$param->name]; 
+                    }
+                } elseif ($class == Request::class) {
+                    $value = $request;
+                } elseif ($class == Session::class) {
+                    $value = $request->getSession();
+                } elseif ($param->isDefaultValueAvailable()) {
+                    $value = $param->getDefaultValue();
+                } else {
+                    throw new \Exception("No param set for {$param->name} {$request->route()}");
+                }
+
+                $arguments->set($param->name, $value);
+                //$request->set($param->name, $value);
+            }
+    
+            return $arguments;
+        }
+
+        public function getRoutes() {
+            return $this->routes;
+        }
+
+        public function getRoute($name) {
+            return $this->routes->get($name, null);
+        }
+
+        public function getContext() {
+            return $this->context;
+        }
+
+        public function generateUrl($name, $args = []) {
+            $route = $this->getRoute($name);
+
+            if (!$this->getRoute($name)) {
+                throw new SebastianException("Route {$name} does not exist.");
+            }
+            
+            $mRoute = $route['route'];
+
+            foreach ($args as $key => $arg) {
+                $match = preg_match("/{($key(?:\:[^\}]*)?)}/", $mRoute);
+
+                if ($match != 0) {
+                    $mRoute = preg_replace("/{($key(?:\:[^\}]*)?)}/", $arg, $mRoute);
+                    unset($args[$key]);
+                }
+            }
+
+            if (count($args) > 0) {
+                $mRoute .= "?" . http_build_query($args);
+            }
+            
+            return $mRoute;
+        }
+    }

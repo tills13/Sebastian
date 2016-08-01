@@ -1,246 +1,189 @@
-<?php	
-	namespace Sebastian;
+<?php   
+    namespace Sebastian;
 
-	use Sebastian\Core\Cache\CacheManager;
-	use Sebastian\Core\Database\Connection;
-	use Sebastian\Core\Database\EntityManager;
+    define('SEBASTIAN_ROOT', __DIR__);
 
-	use Sebastian\Core\Http\Response\Response;
-	use Sebastian\Core\Http\Request;
-	use Sebastian\Core\Http\Router;
-	use Sebastian\Core\Session\Session;
+    use APP_ROOT;
+    use Sebastian\Core\Cache\CacheManager;
+    use Sebastian\Core\Component\Component;
+    use Sebastian\Core\Context\Context;
+    use Sebastian\Core\Database\Connection;
+    use Sebastian\Core\DependencyInjection\Injector;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Loader\YamlLoader;
 
-	use Sebastian\Core\Controller\Controller;
+    use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Http\Exception\HttpException;
+    use Sebastian\Core\Http\Firewall;
+    use Sebastian\Core\Http\Response\JsonResponse;
+    use Sebastian\Core\Http\Response\Response;
+    use Sebastian\Core\Http\Request;
+    use Sebastian\Core\Http\Router;
 
-	use Sebastian\Core\Repo\Repository;
+    /**
+     * Kernel
+     * @author Tyler <tyler@sbstn.ca>
+     * @since  Oct. 2015
+     */
+    class Kernel extends Context {
+        protected $application;
+        protected $components;
+        protected $config;
+        protected $configLoader;
+        protected $environment;
+        protected $request;
+        protected $router;
 
-	use Sebastian\Core\Exception\PageNotFoundException;
-	use Sebastian\Core\Exception\SebastianException;
+        public function __construct($environment = "prod") {
+            parent::__construct();
 
-	/**
-	 * Kernel
-	 * @author Tyler <tyler@sbstn.ca>
-	 * @since  Oct. 2015
-	 */
-	class Kernel {
-		protected $config;
+            $this->components = [];
+            $this->configLoader = new YamlLoader($this);
+            $this->environment = $environment;
+            $this->request = Request::fromGlobals();
+            $this->router = Router::getRouter($this);
 
-		protected $component;
-		protected $components;
-		protected $request;
-		protected $router;
-		protected $session;
-		protected $services;
+            Injector::init([
+                '@request' => $this->request,
+                '@Request' => $this->request,
+                '@router' => $this->router,
+                '@Router' => $this->router,
+            ]);
+        }
 
-		public function __construct($env) {
-			define('SEBASTIAN_ROOT', __DIR__);
+        public function boot() {
+            $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
+            
+            ClassMapper::init($this->getComponents());
+            Firewall::init($this, $this->config->sub('firewall', []));
 
-			$this->env = $env;
-			$this->config = yaml_parse_file(\APP_ROOT . "/../config/config_{$this->env}.yaml") ?: [];
-			$this->ormConfig = yaml_parse_file(\APP_ROOT . "/../config/orm_config.yaml") ?: [];
+            try {
+                $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
+                $this->connection = new Connection($this, $this->config->sub('database'));
 
-			//$this->application = new Application();
-			$this->components = [];
+                $this->setupComponents();
+                $this->router->loadRoutes();
 
-			$this->session = Session::fromGlobals($this);
-			$this->registerComponents();
+                if ($this->config->has('application.app_class')) {
+                    $namespace = $this->config->get('application.namespace');
+                    $appClass = $this->config->get('application.app_class');
+                    $applicationPath = "\\{$namespace}\\{$appClass}";
 
-			$this->cacheManager = new CacheManager($this);
-			$this->entityManager = new EntityManager($this, $this->ormConfig, $this->getConfig('entity'));
-			$this->connection = new Connection($this);
+                    $this->application = new $applicationPath($this, $this->config);
+                } else {
+                    $this->application = new Application($this, $this->config);
+                }
+            } catch (Exception $e) {
+                if ($this->templating) {
+                    return new Response($this->get('templating')->render('exception/exception', [
+                        'exception' => $e
+                    ]));
+                } else {
+                    return new Response($e->getMessage());
+                }
+            }
+        }
 
-			$this->router = Router::getRouter($this);
-			$this->registerServices();
-		}
+        public function handle(Request $request) {
+            if ($response = Firewall::handle($request) instanceof Response) {
+                return $response;
+            }
 
-		public function registerComponents() {
-			$components = $this->getConfig('components');
+            try {
+                $resolved = $this->router->resolve($request);
 
-			$user = $this->getSession()->getUser();
-			foreach ($components as $key => $component) {
-				$requirements = $component['requirements'];
+                $controller = $resolved->get('controller');
+                $method = $resolved->get('method');
+                $arguments = $resolved->get('arguments');
 
-				$valid = true;
-				foreach ($requirements as $mKey => $requirement) {
-					if ($requirement == 'authenticated' && !$user) {
-						$valid = false;
-						break;
-					}
+                if (!method_exists($controller, $method)) {
+                    throw new SebastianException("The requested method (<strong>{$controller}:{$method}</strong>) doesn't exist", 400);
+                }
 
-					if ($requirement == 'admin' && (!$user || !$user->isAdmin())) {
-						$valid = false;
-						break;
-					}
-				}
+                $response = call_user_func_array([$controller, $method], $arguments->toArray());
 
-				if ($valid) $this->components[$key] = $component;
-			}
+                if ($response == null || !$response instanceof Response) {
+                    //throw new SebastianException("Controller must return a response.", 1);
+                } else return $response;
+            } catch (\Exception $e) {
+                $request = $this->getRequest();
 
-			if (count($this->components) == 0) {
-				throw new Exception("Error Processing Request", 1);
-			}
-		}
+                if ($request->isXmlHttpRequest() || strpos($request->route(), '/api/') === 0) {
+                    $code = ($e instanceof HttpException) ? $e->getHttpResponseCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
+                    return new JsonResponse([
+                        'error' => $e->getMessage(),
+                        'code' => $code
+                    ], $code);
+                } else {
+                    return new Response($this->get('templating')->render('exception/exception', [
+                        'exception' => $e
+                    ]));
+                }
+            }
+        }
 
-		public function registerServices() {
-			$services = $this->getConfig('services');
+        public function run($params = null) {
+            $this->application->preHandle();
+            return $this->handle($this->request);
+        }
 
-			foreach ($services ?: [] as $name => $location) {
-				$this->startService($name, $location);
-			}
-		}
+        public function shutdown(Response $response) {
+            $this->application->shutdown($this->request, $response);
+        }
 
-		public function handleRequest(Request $request) {
-			$this->request = $request;
+        public function getApplication() {
+            return $this->application;
+        }
 
-			try {
-				$resolvedRequest = $this->router->resolve($this->request);
+        public function registerComponents(array $components) {
+            foreach ($components as $component) {
+                if (!$component instanceof Component) throw new SebastianException("component must extend Sebastian\Component");
+                $this->registerComponent($component);
+            }
+        }
 
-				$controller = new $resolvedRequest[0]($this);
-				$method = $resolvedRequest[1];
-				$args = $resolvedRequest[2];
+        public function registerComponent(Component $component) {
+            $this->components[$component->getName()] = $component;
+            $this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
+        }
 
-				$args['request'] = $request;
+        public function setupComponents() {
+            uasort($this->components, function($componentA, $componentB) {
+                return $componentA->getWeight() > $componentB->getWeight();
+            });
 
-				if (!method_exists($controller, $method)) {
-					throw new PageNotFoundException("The requested method (<strong>{$method}</strong>) doesn't exist", 400);
-				}
-				
-				$controller->setPage($args['page']);
-				$response = call_user_func_array([$controller, $method], $args);
+            foreach ($this->getComponents() as $key => $component) {
+                if (!$component->checkRequirements($this)) {
+                    unset($this->components[$key]);
+                    continue;
+                }
+                
+                $component->setup($this->config);
+            }
+        }
 
-				if ($response == null) throw new \Exception("Controller must return a response.", 1);
-				else return $response;
-			} catch (\Exception $e) {
-				//var_dump("error: ".$e->getMessage());
-				//$this->controller = new Controller($this);
-				//return $this->controller->renderError($e);
-				return new Response($e->getMessage());
-			}
-		}
+        public function getComponent($name) {
+            return $this->components[strtolower($name)];
+        }
 
-		public function notify($type, $title, $message) {
-			$this->getSession()->addNotice($type, $title, $message);
-		}
+        public function getComponents() {
+            return $this->components;
+        }
 
-		public function startService($name, $location) {
-			$namespace = $this->getAppNamespace();
-			if (strstr($location, ':')) {
-				$location = explode(':', $location);
-				$component = $location[0];
-				$class = $location[1];
-			} else return;
+        public function getConfig() {
+            return $this->config;
+        }
 
-			$serviceLocation = "\\{$namespace}\\{$component}\\Service\\{$class}";
+        public function getEnvironment() {
+            return $this->environment;
+        }
 
-			$this->services[$name] = new $serviceLocation($this);
-		}
+        public function getRequest() {
+            return $this->request;
+        }
 
-
-		// GETTERS ====
-
-		public function getSession() {
-			return $this->session;
-		}
-
-		public function getRequest() {
-			return $this->request;
-		}
-
-		public function getRouter() {
-			return $this->router;
-		}
-
-		public function getController() {
-			return $this->controller;
-		}
-
-		public function getMethod() {
-			return $this->method;
-		}
-
-		public function getArgs() {
-			return $this->args;
-		}
-
-		public function getConnection() {
-			return $this->connection;
-		}
-
-		public function getConfigFile($filename, $parse = [false, null]) {
-			$filename = \APP_ROOT . "/../config/{$filename}";
-			if (!file_exists($filename)) return null;
-
-			$fileType = $parse[1];
-			$parse = $parse[0];
-
-			if ($parse) {
-				if (!$fileType) $fileType = Utils::getExtension($filename);
-
-				if ($fileType == 'yaml') return yaml_parse_file($filename);
-				else if ($fileType == 'json') return json_decode(file_get_contents($filename));
-				else return file_get_contents($filename);
-			} else return file_get_contents($filename);
-		}
-
-		public function getConfig($path = null, $default = null) {
-			$config = $this->config;
-
-			if ($path) {
-				foreach (explode('.', $path) as $subConfig) {
-					if (isset($config[$subConfig])) $config = $config[$subConfig];
-					else return $default;
-				}
-			}
-
-			return $config;
-		}
-
-		public function getAppNamespace() {
-			return $this->getConfig('application.namespace');
-		}
-
-		public function getLogFolder() {
-			$appName = $this->getConfig('application.name');
-			return "/var/log/{$appName}/";
-		}
-
-		public function getService($serviceName) {
-			if (isset($this->services[$serviceName])) {
-				return $this->services[$serviceName];
-			} else return null;
-		}
-
-		/**
-		 * gets the registered components for the session
-		 * not garuanteed to be in order of precedence unless
-		 * called with the $sort=true param
-		 * 
-		 * @param  boolean $sort [description]
-		 * @return a list of components
-		 */
-		public function getComponents($sort = false) {
-			if ($sort) {
-				uasort($this->components, function($a, $b) {
-					return $a['weight'] < $b['weight'];
-				});
-			}
-
-			return $this->components;
-		}
-
-		public function getComponent() {
-			return $this->component;
-		}
-
-		public function getEnvironment() {
-			return $this->env;
-		}
-
-		public function getCacheManager() {
-			return $this->cacheManager;
-		}
-
-		public function getEntityManager() {
-			return $this->entityManager;
-		}
-	}
+        public function getRouter() {
+            return $this->router;
+        }
+    }

@@ -1,84 +1,134 @@
 <?php
-	namespace Sebastian\Core\Cache;
+    namespace Sebastian\Core\Cache;
 
-	use Sebastian\Core\Entity\Entity;
-	use Sebastian\Core\Utility\Logger;
+    use Sebastian\Core\Model\EntityInterface;
+    use Sebastian\Utility\Configuration\Configuration;
 
-	/**
-	 * CacheManager
-	 * @author Tyler <tyler@sbstn.ca>
-	 * @since  Oct. 2015
-	 */
-	class CacheManager {
-		public static $defaultTTL = 120;
-		public static $tag = "CacheManager";
-		public static $logger;
+    /**
+     * CacheManager
+     * @author Tyler <tyler@sbstn.ca>
+     * @since  Oct. 2015
+     */
+    class CacheManager {
+        const DEFAULT_DRIVER = 'Sebastian\Core:NullDriver';
+        const APCU_DRIVER = 'Sebastian\Core:NullDriver';
+        const ARRAY_DRIVER = 'Sebastian\Core:Volatile\ArrayDriver';
 
-		public $enabled;
+        public static $tag = "CacheManager";
 
-		public function __construct($app) {
-			if (!CacheManager::$logger) {
-				CacheManager::$logger = new Logger($app->getLogFolder(), null, ['filename' => 'cache']);
-				CacheManager::$logger->setTag(CacheManager::$tag);
-			}
-			
-			$this->context = $app;
-			$this->enabled = $app->getConfig('cache.enabled', true);
-		}
+        protected $context;
+        protected $options;
+        protected $driver;
+        protected $logger;
 
-		public function clear($which = "") {
-			CacheManager::$logger->info("clearing\t>\t{$which}");
-			return apc_clear_cache($which);
-		}
+        public function __construct($context, Configuration $config) {
+            $this->context = $context;
+            $this->config = $config->extend([
+                'driver' => CacheManager::DEFAULT_DRIVER,
+                'enabled' => false,
+                'logging' => true,
+                'key_generation_strategy' => [
+                    'object' => '{class}_{component}_{id}',
+                    'other' => '{hash}'
+                ]
+            ]);
 
-		public function cache($thing, $override = true, $ttl = null) {
-			$key = $this->getKeyFor($thing);
-			$ttl = $ttl ?: self::$defaultTTL;
+            $this->logger = $this->context->getLogger();
+            $this->initializeDriver($this->config->get('driver'));
+        }
 
-			CacheManager::$logger->info("store\t>\t{$key} \tttl: {$ttl}");
+        // todo needs to handle overrides properly (for custom drivers)
+        public function initializeDriver($driverClass) {
+            $driverClass = explode(':', $driverClass);
 
-			if ($override || (!$override && !$this->isCached($thing))) {
-				apcu_store($key, $thing, $ttl);
-			}
+            if (count($driverClass) != 2) {
+                throw new SebastianException("Cache driver config must be of the form {Namespace}:{Class}");
+            }
 
-			return $this;
-		}
+            $driverNamespace = $driverClass[0];
+            $driverClassName = $driverClass[1];
 
-		public function invalidate($thing) {
-			$key = $this->getKeyFor($thing);
-			CacheManager::$logger->info("invalidate\t>\t{$key}");
+            $classPath = "\\{$driverNamespace}\\Cache\\Driver\\{$driverClassName}";
+            $this->driver = new $classPath($this);
+            $this->driver->init();
+        }
 
-			apcu_delete($key);
-		}
+        public function clear($cache = "") {
+            if ($this->config->get('logging', false)) {
+                //$this->logger->info("clearing {$cache}");
+            }
 
-		public function isCached($thing) {
-			if (!$this->enabled) return false;
+            return $this->driver->clear($cache);
+        }
 
-			$key = $this->getKeyFor($thing);
+        public function cache($key = null, $thing, $override = false, $ttl = null) {
+            if ($key == null) $key = $this->generateKey($thing);
 
-			return apc_exists($key);
-		}
+            if ($this->config->get('logging', false)) {
+                //$this->logger->info("caching {$key}");
+            }
 
-		public function load($thing) {
-			$key = $this->getKeyFor($thing);	
-			
-			$value = apc_fetch($key, $success);
+            return $this->driver->cache($key, $thing, $override, $ttl);
+        }
 
-			if ($success) return $value;
-			else return null;
-		}
+        public function invalidate($key) {
+            if ($this->config->get('logging', false)) {
+                //$this->logger->info("invalidating {$key}");
+            }
 
-		public function getKeyFor($thing) {
-			if (is_string($thing)) return $thing;
-			$val = strtolower(substr(strrchr(get_class($thing), '\\'), 1));
-			$val = str_replace(['\/','\\','-','[',']','(',')','{','}',' '], '', $val);
+            return $this->driver->invalidate($key);
+        }
 
-			if ($thing instanceof Entity && !is_null($thing->getId())) {
-				return implode('_', ['entity', $val, $thing->getId()]);
-			} else {
-				//fix me pls
-				$component = array_keys($this->context->getComponents(true))[0];
-				return implode('_', ['entity', $component, $val]);
-			}
-		}
-	}
+        public function isCached($key) {
+            if ($this->config->get('logging', false)) {
+                //$this->logger->info("query {$key}");
+            }
+
+            return $this->driver->isCached($key);
+        }
+
+        public function load($key) {
+            if ($this->config->get('logging', false)) {
+                //$this->logger->info("loading {$key}");
+            }
+
+            return $this->driver->load($key);
+        }
+
+        public function setDriver(Driver $driver) {
+            $this->driver = $driver;
+        }
+        
+        public function getDriver() {
+            return $this->driver;
+        }
+
+        public function getInfo() {
+            return $this->driver->getInfo();
+        } 
+
+        public function getMemInfo() {
+            return $this->driver->getMemInfo();
+        }
+
+        public function generateKey($thing) {
+            if (is_object($thing)) $base = $this->config->get('key_generation_strategy.object');
+            else $base = $this->config->get('key_generation_strategy.other');
+
+            $fields = ['component', 'class', 'id', 'hash'];
+
+            foreach ($fields as $field) {
+                $context = $this->context;
+                $base = preg_replace_callback("/\{{$field}\}/", function($matches) use ($context, $field, $thing) {
+                    if ($field == 'class') return get_class($thing);
+                    else if ($field == 'component') return "Common";//$context->getApplicableComponent();
+                    else if ($field == 'id') return $thing->getId(); // todo: no
+                    else if ($field == 'hash') {
+                        return is_object($thing) ? spl_object_hash($thing) : hash('sha256', $thing);
+                    } else return "";
+                }, $base);
+            }
+
+            return $base;
+        }
+    }

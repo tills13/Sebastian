@@ -1,0 +1,8 @@
+_internal:
+    type: group
+    route: /_internal
+    routes:
+        javascript:
+            route: /js/{filename:string}
+            controller: Internal:ResourceController
+            method: getJS

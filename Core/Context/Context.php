@@ -1,23 +1,48 @@
 <?php
-	namespace Sebastian\Core\Context;
+    namespace Sebastian\Core\Context;
 
-	/**
-	 * Context
-	 * @author Tyler <tyler@sbstn.ca>
-	 * @since  Oct. 2015
-	 */
-	class Context {
-		protected $context;
+    use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Utility\Utility\Utils;
 
-		public function __construct($context) {
-			$this->context = $context;
-		}
+    class Context implements ContextInterface,\ArrayAccess {
+        protected $extensions;
 
-		public function getContext() {
-			return $this->context;
-		}
+        public function __construct() {
+            $this->extensions = new Collection();
+        }
 
-		public function setContext($context) {
-			$this->context = $context;
-		}
-	}
+        public function __call($method, $arguments) {
+            if ($method == "get") $method = $arguments[0];
+            else if (Utils::startsWith($method, 'get')) {
+                $method = substr($method, 3);
+                $method[0] = strtolower($method);
+            }
+
+            return $this->extensions->get($method);
+        }
+
+        public function __get($offset) {
+            return $this->extensions->get($offset);
+        }
+
+        public function __set($offset, $value) {
+            $this->extensions->set($offset, $value);
+        }
+
+        public function offsetExists($offset) {
+            return $this->extensions->has($offset);
+        }
+
+        public function offsetGet($offset) {
+            return $this->extensions->get($offset);
+        }
+
+        public function offsetSet($offset, $value) {
+            $this->extensions->set($offset, $value);
+        }
+
+        public function offsetUnset($offset) {
+            $this->extensions->remove($offset);
+        }
+    }

@@ -1,80 +1,155 @@
-<?php	
-	namespace Sebastian\Core\Database;
+<?php   
+    namespace Sebastian\Core\Database;
 
-	use Sebastian\Core\Context\Context;
-	use Sebastian\Core\Utility\Utils;
+    use \PDO;
+    use \PDOException;
+    use Sebastian\Core\Exception\SebastianException;
+    use Sebastian\Core\Database\Exception\DatabaseException;
+    use Sebastian\Core\Database\Statement\PreparedStatement;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Collection\Collection;
+    use Sebastian\Utility\Logger\Logger;
 
-	/**
-	 * Connection
-	 * 
-	 * @author Tyler <tyler@sbstn.ca>
-	 * @since  Oct. 2015
-	 */
-	class Connection extends Context {
-		protected static $connection;
-		protected $config;
+    /**
+     * Connection
+     * 
+     * @author Tyler <tyler@sbstn.ca>
+     * @since  Oct. 2015
+     */
+    class Connection {
+        protected $driver;
+        protected $context;
+        protected $config;
+        protected $preparedStatements;
+        protected $logger;
 
-		public function __construct($context) {
-			parent::__construct($context);
+        public function __construct($context, Configuration $config) {
+            $this->context = $context;
+            $this->config = $config->extend([
+                'driver' => 'Sebastian\Core:PostgresDriver',
+                'hostname' => null,
+                'port' => null,
+                'dbname' => null,
+                'username' => null,
+                'password' => null, 
+                'options' => [
+                    'tagging' => true,
+                    'lazy' => false,
+                    'caching' => false,
+                    'connection_timeout' => 5
+                ]
+            ]);
 
-			$this->config = $context->getConfig('database.connection');
-			$this->lazy = $this->config['lazy'] ?: false;
+            $this->logger = $context->getLogger();
+            $this->cm = $context->getCacheManager();
+            $this->preparedStatements = new Collection();
+            $this->initializeDriver($config->get('driver'));
+        }
 
-			if (!Connection::$connection && !$this->lazy) {
-				$this->connect();
-			}
-		}
+        // todo needs to handle overrides properly (for custom drivers)
+        public function initializeDriver($driverClass) {
+            $driverClass = explode(':', $driverClass);
 
-		public function prepare($query) { throw new \Exception('prepare not implemented'); }
+            if (count($driverClass) != 2) {
+                throw new SebastianException("Connection driver config must be of the form {Namespace}:{Class}");
+            }
 
-		// should use prepared statements... maybe someday
-		public function execute($query, $params = []) {
-			//print "{$query}<br/>";
-			foreach ($params as $key => $parameter) {
-				$parameter = Utils::escapeSQL($parameter);
-				$query = preg_replace("(:{$key})", $parameter, $query);
-			}
+            $driverNamespace = $driverClass[0];
+            $driverClassName = $driverClass[1];
 
-			$result = pg_query($this->getConnection(), $query);
-			return new Result($this, $result);
-		}
+            $classPath = "\\{$driverNamespace}\\Database\\PDO\\{$driverClassName}";
+            try {
+                $this->driver = new $classPath(
+                    $this, 
+                    $this->config->get('username'), 
+                    $this->config->get('password'), 
+                    $this->config
+                );
+            } catch (PDOException $e) {
+                $this->driver = null;
+            }
+        }
 
-		public function getStatus() {
-			return pg_connection_status(Connection::$connection);
-		}
+        public function __call($name, $arguments) {
+            $args = str_repeat('?, ', count($arguments) - 1) . " ?";
+            $ps = $this->prepare("SELECT * FROM {$name}({$args})");
+            $ps->execute($arguments);
+            
+            return $ps;
+        }
 
-		public function getQueryBuilder($options = []) {
-			$options = array_merge([
-				'tagging' => $this->config['tagging']
-			], $options);
-			
-			return new QueryBuilder($options);
-		}
+        public function beginTransaction() {
+            return $this->driver->beginTransaction();
+        }
 
-		// this is a wrapper for pg..connection
-		public function getConnection() {
-			$this->connect();
+        public function commit() {
+            return $this->driver->commit();
+        }
 
-			return Connection::$connection;
-		}
+        public function close() {
+            if (!$this->driver) return;
+            $this->driver = null;
+        }
 
-		// private methods
-		private function connect() {
-			if (!Connection::$connection || ($this->getStatus() != PGSQL_CONNECTION_OK)) {
-				$connectionString = $this->getConnectionString();
-				Connection::$connection = pg_connect($connectionString);
-			}
-		}
+        public function execute($query, $params = []) {
+            if (is_object($query)) $query = (string) $query;
+            if ($params instanceof Collection) $params = $params->toArray();
 
-		private function getConnectionString() {
-			$app = $this->getContext();
-			$host = $app->getConfig('database.hostname');
-			$port = $app->getConfig('database.port');
-			$dbname = $app->getConfig('database.dbname');
-			$user = $app->getConfig('database.username');
-			$password = $app->getConfig('database.password');
-			$connectTimeout = $app->getConfig('database.password', 5);
+            $ps = $this->prepare($query);
+            $ps->execute($params);
+            return $ps;
+        }
 
-			return "host={$host} port={$port} dbname={$dbname} user={$user} password={$password} connect_timeout=5";
-		}
-	}
+        public function prepare($query, array $options = []) {
+            if (!$this->driver) {
+                throw new DatabaseException("Driver has not been set up properly.");
+            }
+
+            $ps = $this->driver->prepare($query, $options);
+            return $ps;
+        }
+
+        public function quote($string, $params = PDO::PARAM_STR) {
+            return $this->driver->quote($string, $params);
+        }
+
+        public function rollback() {
+            return $this->driver->rollback();
+        }
+
+        public function inTransaction() {
+            return $this->driver->inTransaction();
+        }
+
+        public function getAttribute($attribute) {
+            return $this->driver->getAttribute($attribute);
+        }
+
+        public function getConfig() {
+            return $this->config;
+        }
+
+        public function getDriver() {
+            return $this->driver;
+        }
+
+        public function getLastError() {
+            return $this->driver->errorInfo();
+        }
+
+        public function getLastErrorCode() {
+            return $this->driver->errorCode();
+        }
+
+        public function getLastId($name = null) {
+            return $this->driver->lastInsertId($name);
+        }
+
+        public function setLogger(Logger $logger) {
+            $this->logger = $logger;
+        }
+
+        public function getLogger() {
+            return $this->logger;
+        }
+    }
