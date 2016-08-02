@@ -27,8 +27,18 @@
 
             parent::__construct($dns, $username, $password, []);
             
-            $this->setAttribute(PDO::ATTR_STATEMENT_CLASS, [Statement::class, [$this]]);
+            if ($config->get('connection.persistent', false)) {
+                $this->setAttribute(PDO::ATTR_PERSISTENT, true);
+            } else {
+                if ($config->has('connection.statement_class')) {
+                    $statementClass = ClassMapper::parse($config->get('connection.statement_class'));
+                } else $statementClass = Statement::class;
+                
+                $this->setAttribute(PDO::ATTR_STATEMENT_CLASS, [$statementClass, [$this, $config->sub('connection')]]);
+            }
+        
             $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); // todo configurable
+            $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         }
 
         public function setDriverName($driverName) {

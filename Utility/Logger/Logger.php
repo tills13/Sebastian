@@ -57,7 +57,7 @@
 
         private function addHandlersFromConfig() {
             $handlers = $this->config->sub('handlers');
-            //var_dump($handlers);
+
             foreach ($handlers as $name => $config) {
                 $type = $config->get('type', null);
                 if ($type == "file") $mHandler = new FileLogHandler($this, $config, $name);

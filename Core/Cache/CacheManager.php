@@ -72,6 +72,7 @@
         }
 
         public function invalidate($key) {
+            print ($key);
             if ($this->config->get('logging', false)) {
                 //$this->logger->info("invalidating {$key}");
             }

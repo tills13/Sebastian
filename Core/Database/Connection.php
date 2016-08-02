@@ -32,7 +32,7 @@
                 'dbname' => null,
                 'username' => null,
                 'password' => null, 
-                'options' => [
+                'connection' => [
                     'tagging' => true,
                     'lazy' => false,
                     'caching' => false,

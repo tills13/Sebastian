@@ -58,6 +58,8 @@
         }
 
         public function get($offset) {
+            if (is_array($offset)) $offset = $offset[0];
+            
             return $this->{$offset};
         }
 

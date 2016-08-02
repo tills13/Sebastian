@@ -255,8 +255,9 @@
 
                 if (array_key_exists($param->name, $attributes)) {
                     if ($class) {
-                        $repo = $this->em->getRepository($this->em->getBestGuessClass($class));
-                        $value = $repo->get(['id' => $attributes[$param->name]]);
+                        $em = $this->context->getEntityManager();
+                        $repo = $em->getRepository($class);
+                        $value = $repo->get($attributes[$param->name]);
                     } else {
                         $value = $attributes[$param->name]; 
                     }

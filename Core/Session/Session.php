@@ -82,7 +82,6 @@
         }
 
         public function check() {
-            //var_dump($_SESSION['session_user']);
             return ($_SESSION['session_user'] != null);
         }
 
