@@ -2,6 +2,7 @@
     namespace Sebastian\Core\Cache;
 
     use Sebastian\Core\Model\EntityInterface;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Configuration\Configuration;
 
     /**
@@ -34,22 +35,14 @@
             ]);
 
             $this->logger = $this->context->getLogger();
-            $this->initializeDriver($this->config->get('driver'));
+            $this->initialize($this->config->get('driver'));
         }
 
         // todo needs to handle overrides properly (for custom drivers)
-        public function initializeDriver($driverClass) {
-            $driverClass = explode(':', $driverClass);
-
-            if (count($driverClass) != 2) {
-                throw new SebastianException("Cache driver config must be of the form {Namespace}:{Class}");
-            }
-
-            $driverNamespace = $driverClass[0];
-            $driverClassName = $driverClass[1];
-
-            $classPath = "\\{$driverNamespace}\\Cache\\Driver\\{$driverClassName}";
-            $this->driver = new $classPath($this);
+        public function initialize(string $driver) {
+            $driver = ClassMapper::parse($driver, "Cache\\Driver");
+        
+            $this->driver = new $driver($this);
             $this->driver->init();
         }
 
@@ -72,7 +65,6 @@
         }
 
         public function invalidate($key) {
-            print ($key);
             if ($this->config->get('logging', false)) {
                 //$this->logger->info("invalidating {$key}");
             }

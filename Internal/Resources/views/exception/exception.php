@@ -6,7 +6,7 @@
     }
 ?>
 
-<?=$this->extend('master')?>
+<?=$this->extend($errorTemplate, $errorTemplate !== null)?>
 
 <?=$this->block('title', get_class($exception))?>
 

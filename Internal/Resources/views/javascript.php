@@ -1,5 +1,5 @@
 <script type="text/javascript" src="<?=$router->generateUrl("_internal:javascript", ['filename' => 'router.js'])?>"></script>
 <script type="text/javascript" src="<?=$router->generateUrl("_internal:javascript", ['filename' => 'sebastian.js'])?>"></script>
 <script>
-    sebastian.router.registerRoutes(<?=json_encode($router->getRoutes())?>);
+    sebastian.registerRoutes(<?=json_encode($router->getRoutes())?>);
 </script>

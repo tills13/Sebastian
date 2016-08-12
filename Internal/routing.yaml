@@ -4,5 +4,5 @@ _internal:
     routes:
         javascript:
             route: /js/{filename:string}
-            controller: Internal:ResourceController
+            controller: Sebastian\Internal:InternalController
             method: getJS

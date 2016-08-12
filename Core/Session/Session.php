@@ -61,6 +61,10 @@
             else unset($_SESSION[$field]);
         }
 
+        public function close() {
+            session_write_close();
+        }
+
         public function set($field, $value, $override = false) {
             if (!$override && isset($_SESSION[$field])) return;
 

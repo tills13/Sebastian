@@ -9,7 +9,7 @@
         public function __construct(ContextInterface $context, $name, Configuration $config = null) {
             parent::__construct($context, $name, $config);
 
-            $this->setWeight(0);
+            $this->setWeight(-999);
         }
 
         public function setup(Configuration $config = null) {

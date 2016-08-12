@@ -21,17 +21,21 @@
         private $reflection;
 
         public function __construct(ContextInterface $context, $name, Configuration $config = null) {
-            $this->config = $config ?? new Configuration();
             $this->context = $context;
             $this->name = $name;
             $this->requirements = new Collection();
             $this->routePrefix = null;
-            $this->weight = 0;
 
+            $this->config = $config ?? $context->getConfig()->sub("components.{$this->name}", []);
+            $this->weight = $this->config->get('weight', 0);
             $this->reflection = new ReflectionClass(get_class($this));
         }
 
-        public function setup(Configuration $config = null) {}
+        public function setup() {}
+
+        public function setConfig(Configuration $config) {
+            $this->config = $config;
+        }
 
         public function getConfig() {
             return $this->config;

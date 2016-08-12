@@ -7,6 +7,8 @@
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
+    use Sebastian\Core\Event\Event;
+    use Sebastian\Core\Event\EventBus;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\DependencyInjection\Injector;
     use Sebastian\Utility\ClassMapper\ClassMapper;
@@ -27,11 +29,13 @@
      * @since  Oct. 2015
      */
     class Kernel extends Context {
+        private $components;
+
         protected $application;
-        protected $components;
         protected $config;
         protected $configLoader;
         protected $environment;
+        protected $mapper;
         protected $request;
         protected $router;
 
@@ -39,23 +43,25 @@
             parent::__construct();
 
             $this->components = [];
-            $this->configLoader = new YamlLoader($this);
+            $this->config = Configuration::fromFilename("config_{$environment}.yaml");
             $this->environment = $environment;
             $this->request = Request::fromGlobals();
             $this->router = Router::getRouter($this);
 
-            Injector::init([
+            $this->registerComponents([
+                new Core\CoreComponent($this, "Sebastian\\Core"),
+                new Internal\InternalComponent($this, "Sebastian\\Internal")
+            ]);
+
+            Injector::register([
                 '@request' => $this->request,
-                '@Request' => $this->request,
                 '@router' => $this->router,
-                '@Router' => $this->router,
             ]);
         }
 
         public function boot() {
-            $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
-            
-            ClassMapper::init($this->getComponents());
+            $this->mapper = ClassMapper::getInstance($this);
+
             Firewall::init($this, $this->config->sub('firewall', []));
 
             try {
@@ -104,7 +110,7 @@
                 $response = call_user_func_array([$controller, $method], $arguments->toArray());
 
                 if ($response == null || !$response instanceof Response) {
-                    //throw new SebastianException("Controller must return a response.", 1);
+                    throw new SebastianException("Controller must return a response.", 1);
                 } else return $response;
             } catch (\Exception $e) {
                 $request = $this->getRequest();
@@ -116,7 +122,9 @@
                         'code' => $code
                     ], $code);
                 } else {
+                    $errorTemplate = $this->getConfig()->get('components.sebastian_extra.templating.error_template', 'internal');
                     return new Response($this->get('templating')->render('exception/exception', [
+                        'errorTemplate' => $errorTemplate, 
                         'exception' => $e
                     ]));
                 }
@@ -130,6 +138,8 @@
 
         public function shutdown(Response $response) {
             $this->application->shutdown($this->request, $response);
+            $this->request->getSession()->close();            
+            EventBus::trigger(Event::SHUTDOWN, $this->request, $response);
         }
 
         public function getApplication() {
@@ -138,7 +148,10 @@
 
         public function registerComponents(array $components) {
             foreach ($components as $component) {
-                if (!$component instanceof Component) throw new SebastianException("component must extend Sebastian\Component");
+                if (!$component instanceof Component) {
+                    throw new SebastianException("Component must extend Sebastian\Component");
+                }
+
                 $this->registerComponent($component);
             }
         }
@@ -159,7 +172,7 @@
                     continue;
                 }
                 
-                $component->setup($this->config);
+                $component->setup();
             }
         }
 
