@@ -50,7 +50,7 @@
 
         // todo needs to handle overrides properly (for custom drivers)
         public function initializeDriver($driverClass) {
-            $class = ClassMapper::parse($driverClass, "Database\\PDO");
+            $class = ClassMapper::parseClass($driverClass, "Database\\PDO");
 
             try {
                 $this->driver = new $class(

@@ -81,7 +81,7 @@
                 if (!$service->has('class')) continue;
 
                 $class = $service->get('class');
-                $class = ClassMapper::parse($class);
+                $class = ClassMapper::parseClass($class);
                 
                 $service = Injector::create($class);
                 $this["service.{$key}"] = $service;

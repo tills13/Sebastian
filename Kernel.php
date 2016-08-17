@@ -9,6 +9,7 @@
     use Sebastian\Core\Context\Context;
     use Sebastian\Core\Event\Event;
     use Sebastian\Core\Event\EventBus;
+    use Sebastian\Core\Event\ViewEvent;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\DependencyInjection\Injector;
     use Sebastian\Utility\ClassMapper\ClassMapper;
@@ -22,6 +23,8 @@
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Router;
+
+    
 
     /**
      * Kernel
@@ -52,16 +55,19 @@
                 new Core\CoreComponent($this, "Sebastian\\Core"),
                 new Internal\InternalComponent($this, "Sebastian\\Internal")
             ]);
-
+            
             Injector::register([
                 '@request' => $this->request,
+                '@session' => $this->request->getSession(),
                 '@router' => $this->router,
             ]);
         }
 
+        /**
+         * boot is run after all components have been registered.
+         */
         public function boot() {
             $this->mapper = ClassMapper::getInstance($this);
-
             Firewall::init($this, $this->config->sub('firewall', []));
 
             try {
@@ -80,9 +86,11 @@
                 } else {
                     $this->application = new Application($this, $this->config);
                 }
+
+                Injector::register(['@application' => $this->application]);
             } catch (Exception $e) {
                 if ($this->templating) {
-                    return new Response($this->get('templating')->render('exception/exception', [
+                    return new Response($this->templating->render('exception/exception', [
                         'exception' => $e
                     ]));
                 } else {
@@ -92,26 +100,32 @@
         }
 
         public function handle(Request $request) {
-            if ($response = Firewall::handle($request) instanceof Response) {
+            if (($response = Firewall::handle($request)) instanceof Response) {
                 return $response;
             }
 
             try {
-                $resolved = $this->router->resolve($request);
-
-                $controller = $resolved->get('controller');
-                $method = $resolved->get('method');
-                $arguments = $resolved->get('arguments');
+                list($controller, $method, $arguments) = $this->router->resolve($request); 
 
                 if (!method_exists($controller, $method)) {
                     throw new SebastianException("The requested method (<strong>{$controller}:{$method}</strong>) doesn't exist", 400);
                 }
 
-                $response = call_user_func_array([$controller, $method], $arguments->toArray());
+                $response = call_user_func_array([$controller, $method], $arguments);
+                
+                if ($response === null || !$response instanceof Response) {
+                    $event = new ViewEvent($this->request, $response);
+                    EventBus::trigger(Event::VIEW, $event);
 
-                if ($response == null || !$response instanceof Response) {
-                    throw new SebastianException("Controller must return a response.", 1);
-                } else return $response;
+                    $response = $event->getResponse();
+
+                    if ($response === null || !$response instanceof Response) {
+                        throw new SebastianException("Controller must return a response or a view");
+                    }
+                }
+
+                Injector::register(['@response' => $response]);
+                return $response;
             } catch (\Exception $e) {
                 $request = $this->getRequest();
 
@@ -139,7 +153,7 @@
         public function shutdown(Response $response) {
             $this->application->shutdown($this->request, $response);
             $this->request->getSession()->close();            
-            EventBus::trigger(Event::SHUTDOWN, $this->request, $response);
+            EventBus::trigger(Event::SHUTDOWN, null, $this->request, $response);
         }
 
         public function getApplication() {
@@ -158,7 +172,7 @@
 
         public function registerComponent(Component $component) {
             $this->components[$component->getName()] = $component;
-            $this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
+            //$this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
         }
 
         public function setupComponents() {
@@ -177,7 +191,7 @@
         }
 
         public function getComponent($name) {
-            return $this->components[strtolower($name)];
+            return $this->components[$name];
         }
 
         public function getComponents() {

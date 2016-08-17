@@ -2,11 +2,13 @@
     namespace Sebastian\Core\DependencyInjection;
 
     use \ReflectionClass;
+    use \ReflectionFunction;
     use \ReflectionMethod;
     use \ReflectionParameter;
 
     use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Core\Http\Request;
+    use Sebastian\Core\Model\EntityInterface;
 
     class Injector {
         protected static $instance;
@@ -20,63 +22,83 @@
         }
 
         public static function getInstance() : Injector {
-            if (!Injector::$instance) {
+            if (!self::$instance) {
                 Injector::$instance = new Injector();
             }
 
-            return Injector::$instance;
+            return self::$instance;
         }
 
-        public static function register(array $variables = []) {
-            $variables = array_change_key_case($variables, CASE_LOWER);
+        public static function instance(string $class, $dependencies = []) {
+            $reflection = new ReflectionClass($class);
+            $constructor = $reflection->getConstructor();
 
+            return $reflection->newInstanceArgs(self::resolveMethod($constructor, $dependencies));
+        }
+
+        public static function register(array $dependencies = []) {
             $instance = Injector::getInstance();
-            $instance->setDependencies(array_merge(
-                $instance->getDependencies() ?? [], 
-                $variables
-            ));
+            $instance->addDependencies($dependencies);
         }
 
         public static function resolve(string $location, string $extra = null) {
-            list($component, $class, $method) = explode(':', $location);
-
-            $class = ClassMapper::parse("{$component}:{$class}", $extra);
+            list($component, $class, $method) = ClassMapper::parse($location, $extra);
             $reflection = new ReflectionClass($class);
 
             $method = $method ? $reflection->getMethod($method) : $reflection->getConstructor();
             return self::resolveMethod($method);
         }
 
-        public static function resolveMethod(ReflectionMethod $method) {
+        public static function resolveMethod(ReflectionMethod $method, array $dependencies = []) {
             $instance = Injector::getInstance();
+            $instance->addDependencies($dependencies);
             $parameters = ($method == null) ? [] : $method->getParameters();
 
+            return $instance->resolveParameters($parameters);
+        }
+
+        public static function resolveCallable(Callable $callable, array $dependencies = []) {
+            $instance = Injector::getInstance();
+            $instance->addDependencies($dependencies);
+
+            $reflection = new ReflectionFunction($callable);
+            $parameters = $reflection->getParameters();
+
+            return $instance->resolveParameters($parameters);
+        }
+
+        public function resolveParameters(array $parameters) {
             $dependencies = [];
-            foreach ($parameters as $parameter) {
+            foreach ($parameters as $index => $parameter) {
                 $name = $parameter->getName();
                 $class = $parameter->getClass();
-                $className = $class ? $class->getShortName() : "";
+                $param = $class ? $class->getShortName() : $name;
 
-
-
-
-
-
-
-
-
-                if (isset(self::$globalDependencies["@{$className}"])) {
-                    $dependencies[] = self::$globalDependencies["@{$className}"];
-                } else if (isset(self::$globalDependencies["{$name}"])) {
-                    $dependencies[] = self::$globalDependencies["{$name}"];
-                } else if ($parameter->isDefaultValueAvailable()) {
-                    $dependencies[] = $parameter->getDefaultValue();
+                if ($class && is_subclass_of($class->name, EntityInterface::class)) {
+                    /*if ($this->entityManager) {
+                        $repo = $this->entityManager->getRepository($class->name);
+                        $dependency = $repo->get($this->getDependency($name));
+                        $dependencies[] = $dependency;
+                    }*/
                 } else {
-                    $dependencies[] = null;
+                    $dependency = $this->getDependency("@{$param}") ??
+                                $this->getDependency("{$param}") ??
+                                ($parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null);
+
+                    $dependencies[] = $dependency;
                 }
             }
 
             return $dependencies;
+        }
+
+        public function addDependencies(array $dependencies = []) {
+            $dependencies = array_change_key_case($dependencies, CASE_LOWER);
+
+            $this->setDependencies(array_merge(
+                $this->getDependencies() ?? [], 
+                $dependencies
+            ));
         }
 
         public function setDependencies($dependencies) {
@@ -87,36 +109,11 @@
             return $this->dependencies;
         }
 
-        public function getDependency($dependency) {
-            return $this->getDependencies()[strtolower($dependency)];
+        public function getDependency(string $dependency) {
+            return $this->getDependencies()[strtolower($dependency)] ?? null;
         }
 
         public function hasDependency($dependency) {
             return isset($this->getDependencies()[$dependency]);
         }
-
-
-
-
-
-
-        /*public static function create(string $class) {
-            $reflection = new ReflectionClass($class);
-            $constructor = $reflection->getConstructor();
-
-            $dependencies = self::resolveMethod($constructor);
-            return $reflection->newInstanceArgs($dependencies);
-        }
-
-        public static function resolveClass() {
-            
-        }
-
-        public static function resolveParameter(ReflectionParameter $param) {
-
-        }
-
-        public function resolveParameters() {
-
-        }*/
     }

@@ -33,7 +33,7 @@
 
             if (!$config->get('connection.persistent', false)) {
                 if ($config->has('connection.statement_class')) {
-                    $statementClass = ClassMapper::parse($config->get('connection.statement_class'));
+                    $statementClass = ClassMapper::parseClass($config->get('connection.statement_class'));
                 } else $statementClass = Statement::class;
                 
                 $options[PDO::ATTR_STATEMENT_CLASS] = [

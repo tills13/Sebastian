@@ -28,21 +28,22 @@
         /*
          * Map Component:Extra:Class -> full Namespace path
          */
-        public static function parse(string $classString, $extra = null) : string {
+        public static function parse(string $classString, $extra = null) : array {
             $instance = ClassMapper::getInstance();
 
             if (strstr($classString, ':')) {
                 if (substr_count($classString, ':') == 1) list($component, $class) = explode(':', $classString);
-                else if (substr_count($classString, ':') == 2) list($component, $extra, $class) = explode(':', $classString);
+                else if (substr_count($classString, ':') == 2) list($component, $mExtra, $class) = explode(':', $classString);
+                else if (substr_count($classString, ':') == 3) list($component, $mExtra, $class, $method) = explode(':', $classString);
                 else {
                     throw new Exception("Invalid short class: {$class}."); 
                 }
 
                 if (($component = $instance->getComponent($component)) !== null) {
-                    if ($extra) $class = implode('\\', [$extra, $class]);
+                    if ($extra ?? $mExtra ?? false) $class = implode('\\', [$extra ?? $mExtra, $class]);
                     $class = $component->getClass($class);
 
-                    return $class;
+                    return [ $component, $class, $method ?? null ];
                 } else {
                     throw new Exception("Class {$classString} does not exist.");
                 }
@@ -55,6 +56,11 @@
             die($classString);
 
             return null;
+        }
+
+        public static function parseClass(string $classString, $extra = null) : string {
+            list($component, $class, $method) = self::parse($classString, $extra);
+            return $class;
         }
 
         public function getComponent(string $component) {

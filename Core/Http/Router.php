@@ -6,16 +6,18 @@
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Database\EntityManager;
-    use Sebastian\Core\Model\EntityInterface;
+    use Sebastian\Core\DependencyInjection\Injector;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Session\Session;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Utility\Utils;
 
     use \ReflectionClass;
+    use \ReflectionMethod;
     
     /**
      * Router
@@ -53,7 +55,7 @@
 
             $this->em = $context->getEntityManager();
             $this->cm = $context->getCacheManager();
-            ////$this->logger = $context->getLogger();
+            //$this->logger = $context->getLogger();
         }
 
         public function attachComponent(Component $component) {
@@ -77,31 +79,26 @@
 
             foreach ($paths as $index => $path) {
                 if (!file_exists($path)) continue;
-
-                $startTime = microtime(true);
+                
                 $routes = Configuration::fromPath($path);
 
                 if (!$routes || $routes->count() == 0) continue;
 
                 foreach ($routes as $name => $mRoute) {
-                    if ($mRoute->has('type') || $mRoute->get('type') == 'group') {
+                    if ($mRoute->has('type') && $mRoute->get('type') === 'group') {
                         $this->addRouteGroup($name, $mRoute);
                     } else {
-                        // required fields
-                        $route = $mRoute->get('route');
-                        $controller = $mRoute->get('controller');
-                        $method = $mRoute->get('method');
+                        if (($use = $mRoute->get('use')) !== null) { // require use
+                            list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
 
-                        // optional
-                        $methods = $mRoute->get('methods', ['GET', 'POST']);
-                        $requirements = $mRoute->get('requirements', []);
+                            $route = $mRoute->get('route');
+                            $methods = $mRoute->get('methods', ['GET', 'POST']);
+                            $requirements = $mRoute->get('requirements', []);
 
-                        $this->addRoute($name, $route, $controller, $method, $requirements, $methods);
+                            $this->addRoute($name, $route, $component, $controller, $method, $requirements, $methods);
+                        }
                     }
                 }
-
-                $count = count($routes);
-                $time = microtime(true) - $startTime;
             }
         }
 
@@ -109,17 +106,15 @@
             $baseRoute = $group->get('route');
 
             foreach ($group->sub('routes') as $name => $mRoute) {
-                $mName = "{$groupName}:{$name}";
-                
-                $route = $baseRoute . $mRoute->get('route');
-                $controller = $mRoute->get('controller');
-                $method = $mRoute->get('method');
+                if (($use = $mRoute->get('use')) !== null) { // require use
+                    list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
 
-                // optional
-                $methods = $mRoute->get('methods', ['GET', 'POST']);
-                $requirements = $mRoute->get('requirements', []);
+                    $route = $baseRoute . $mRoute->get('route');
+                    $methods = $mRoute->get('methods', ['GET', 'POST']);
+                    $requirements = $mRoute->get('requirements', []);
 
-                $this->addRoute($mName, $route, $controller, $method, $requirements, $methods);
+                    $this->addRoute("{$groupName}:{$name}", $route, $component, $controller, $method, $requirements, $methods);
+                }
             }
         }
         
@@ -131,16 +126,10 @@
          * @param string $method     the method in the controller to be used
          * @param array $methods     [get,post]
          */
-        public function addRoute($name, $route, $controller, $method, $requirements, $methods = null) {
-            $methods = ($methods !== null) ? array_map(function($value) { 
+        public function addRoute($name, $route, $component, $controller, $method, $requirements, $methods = null) {
+            $methods = array_map(function($value) { 
                 return strtoupper($value); 
-            }, $methods) : ['GET','POST'];
-
-            if (strstr($controller, ':')) {
-                $components = explode(':', $controller);     
-                $component = $components[0];
-                $controller = $components[1];
-            } else $component = null;
+            }, $methods ?? ['GET','POST']);
             
             $this->routes->set($name, [
                 'match' => $this->generateRouteRegex($route, $requirements),
@@ -172,7 +161,7 @@
                 else if (in_array($type, ['int', 'number', 'integer'])) return "(?P<{$param}>\d+)";
             }, $route, -1, $count);
 
-            return "$parsedRoute\/?";
+            return "{$parsedRoute}\/?";
         }
 
         /**
@@ -182,100 +171,33 @@
          * @return array the controller, method, and arguments
          */
         public function resolve(Request $request) {
-            $components = $this->getContext()->getComponents(true);
-            $context = $this->getContext();
-
-            //header("Content-Type: application/json");
-            //print(json_encode($this->routes)); die();
-
             foreach ($this->routes as $index => $route) {
-                if (!in_array($request->method(), $route['methods'])) continue;
+                if (!in_array($request->method(), $route['methods'] ?? ['GET', 'POST'])) continue;
 
                 preg_match("/^{$route->get('match')}$/", $request->route(), $matches);
 
                 if (count($matches) > 0) {
-                    //$this->logger->info("matched route: {$request->route()} -> {$route['route']}");
-
-                    $controller = null;
-                    if ($route->has('component')) {
-                        $component = $context->getComponent($route->get('component'));
-
-                        if (!$component) continue;
-
-                        if ($component->hasController($route['controller'])) {
-                            $controller = $component->getController($route['controller']);
-                            $controller = new $controller($context->getApplication(), $component);
-                        } else continue;
-                    } else {
-                        foreach ($components as $component) {
-                            //print ($component->getName() . " " . $component->hasController($route['controller']));
-                            if ($component->hasController($route['controller'])) {
-                                $controller = $component->getController($route['controller']);
-                                $controller = new $controller($context->getApplication(), $component);
-                                break;
-                            } else continue;
-                        }
-
-                        if (!$controller) continue;
-                    }
-
-                    //$this->logger->info("using controller $controller");
-
+                    $component = $route->get('component');
                     $method = $route->get('method') . 'Action';
-                    $reflection = new \ReflectionMethod($controller, $method);
 
-                    $parameters = $reflection->getParameters();
-                    $args = $this->parseArgs($matches, $parameters, $request);
-
-                    return new Collection([
-                        'controller' => $controller, 
-                        'method' => $method, 
-                        'arguments' => $args
+                    $controller = Injector::instance($route->get('controller'), [
+                        '@component' => $component
                     ]);
+                    
+                    $reflection = new ReflectionMethod($controller, $method);
+                    $params = Injector::resolveMethod($reflection, array_merge(
+                        $request->params(), $matches
+                    ));
+
+                    return [
+                        $controller,
+                        $method,
+                        $params
+                    ];
                 }
             }
 
             throw HttpException::notFoundException();
-        }
-
-        /**
-         * [parseArgs description]
-         * @param  [type] $attributes [description]
-         * @param  [type] $parameters [description]
-         * @param  [type] $request    [description]
-         * @return [type]             [description]
-         *
-         * @todo  when fetching an entity, don't just assume it's 'id'
-         */
-        protected function parseArgs($attributes, $parameters, $request) {
-            $arguments = new Collection();
-
-            foreach ($parameters as $param) {
-                $class = $param->getClass() ? $param->getClass()->getName() : null;
-
-                if (array_key_exists($param->name, $attributes)) {
-                    if ($class) {
-                        $em = $this->context->getEntityManager();
-                        $repo = $em->getRepository($class);
-                        $value = $repo->get($attributes[$param->name]);
-                    } else {
-                        $value = $attributes[$param->name]; 
-                    }
-                } elseif ($class == Request::class) {
-                    $value = $request;
-                } elseif ($class == Session::class) {
-                    $value = $request->getSession();
-                } elseif ($param->isDefaultValueAvailable()) {
-                    $value = $param->getDefaultValue();
-                } else {
-                    throw new \Exception("No param set for {$param->name} {$request->route()}");
-                }
-
-                $arguments->set($param->name, $value);
-                //$request->set($param->name, $value);
-            }
-    
-            return $arguments;
         }
 
         public function getRoutes() {

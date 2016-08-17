@@ -122,7 +122,7 @@
         }
 
         public function params() {
-            return array_merge($this->post, $this->get);
+            return array_merge($this->post->toArray(), $this->get->toArray());
         }
 
         public function getSession() {

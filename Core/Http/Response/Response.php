@@ -23,8 +23,8 @@
         protected $content;
         protected $responseCode;
 
-        public function __construct($content = null, $responseCode = null) {
-            $this->headers = new Collection();
+        public function __construct($content = null, $responseCode = null, $headers = []) {
+            $this->headers = new Collection($headers);
             
             $this->content = $content;
             $this->responseCode = $responseCode;

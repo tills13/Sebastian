@@ -40,7 +40,7 @@
 
         // todo needs to handle overrides properly (for custom drivers)
         public function initialize(string $driver) {
-            $driver = ClassMapper::parse($driver, "Cache\\Driver");
+            $driver = ClassMapper::parseClass($driver, "Cache\\Driver");
         
             $this->driver = new $driver($this);
             $this->driver->init();

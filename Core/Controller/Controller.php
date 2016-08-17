@@ -34,11 +34,12 @@
             $this->renderer = $this->context->get('templating');
         }
 
-        public function render($template, $data = []) {
-            $response = new Response();
-            $response->setContent($this->renderer->render($template, $data));
-            $response->sendHttpResponseCode(Response::HTTP_OK);
-            return $response;
+        public function render($template, array $data = []) {
+            return $this->renderer->render($template, $data);
+            //$response = new Response();
+            //$response->setContent($this->renderer->render($template, $data));
+            //$response->sendHttpResponseCode(Response::HTTP_OK);
+            //return $response;
         }
 
         public function redirect($url, $https = false, $code = Response::HTTP_FOUND) {
