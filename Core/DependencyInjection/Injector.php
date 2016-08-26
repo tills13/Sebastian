@@ -29,7 +29,16 @@
             return self::$instance;
         }
 
-        public static function instance(string $class, $dependencies = []) {
+        public static function instance(string $location, string $extra = null,  $dependencies = []) {
+            list($component, $class, $method) = ClassMapper::parse($location, $extra);
+
+            $reflection = new ReflectionClass($class);
+            $constructor = $reflection->getConstructor();
+
+            return $reflection->newInstanceArgs(self::resolveMethod($constructor, $dependencies));
+        }
+
+        public static function instanceClass(string $class, array $dependencies = []) {
             $reflection = new ReflectionClass($class);
             $constructor = $reflection->getConstructor();
 
@@ -41,6 +50,14 @@
             $instance->addDependencies($dependencies);
         }
 
+        public static function registerByClass($object, bool $global = true) {
+            $reflection = new ReflectionClass($object);
+            $name = $reflection->getShortName();
+            $prefix = $global ? "@" : "$";
+
+            self::register([ "{$prefix}{$name}" => $object ]);
+        }
+
         public static function resolve(string $location, string $extra = null) {
             list($component, $class, $method) = ClassMapper::parse($location, $extra);
             $reflection = new ReflectionClass($class);
@@ -49,7 +66,7 @@
             return self::resolveMethod($method);
         }
 
-        public static function resolveMethod(ReflectionMethod $method, array $dependencies = []) {
+        public static function resolveMethod(ReflectionMethod $method = null, array $dependencies = []) {
             $instance = Injector::getInstance();
             $instance->addDependencies($dependencies);
             $parameters = ($method == null) ? [] : $method->getParameters();
@@ -61,10 +78,16 @@
             $instance = Injector::getInstance();
             $instance->addDependencies($dependencies);
 
-            $reflection = new ReflectionFunction($callable);
-            $parameters = $reflection->getParameters();
+            if (is_array($callable)) {
+                $reflection = new ReflectionClass($callable[0]);
+                $method = $reflection->getMethod($callable[1]);
+                return self::resolveMethod($method);
+            } else {
+                $reflection = new ReflectionFunction($callable);
+                $parameters = $reflection->getParameters();
 
-            return $instance->resolveParameters($parameters);
+                return $instance->resolveParameters($parameters);
+            }
         }
 
         public function resolveParameters(array $parameters) {
@@ -94,6 +117,8 @@
 
         public function addDependencies(array $dependencies = []) {
             $dependencies = array_change_key_case($dependencies, CASE_LOWER);
+
+            //foreach ($dependencies)
 
             $this->setDependencies(array_merge(
                 $this->getDependencies() ?? [], 

@@ -20,4 +20,8 @@
         abstract public function load($key);
         abstract public function getInfo();
         abstract public function getMemInfo();
+
+        public function getName() {
+            return get_class($this);
+        }
     }

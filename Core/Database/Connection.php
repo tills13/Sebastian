@@ -60,8 +60,7 @@
                     $this->config
                 );
             } catch (PDOException $e) {
-                var_dump($e); die();
-                $this->driver = null;
+                // @todo log it
             }
         }
 

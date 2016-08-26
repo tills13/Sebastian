@@ -2,8 +2,9 @@
     namespace Sebastian\Core\Event;
 
     class Event {
-        const SHUTDOWN = 'shutdown';
+        const PRE_REQUEST = 'pre_request';
         const VIEW = 'view';
+        const SHUTDOWN = 'shutdown';
 
         protected $shouldStopPropagation = false;
 

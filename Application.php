@@ -1,6 +1,8 @@
 <?php
     namespace Sebastian;
 
+    use \ReflectionClass;
+
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
     use Sebastian\Core\DependencyInjection\Injector;
@@ -10,14 +12,12 @@
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\JsonResponse;
     use Sebastian\Core\Http\Response\Response;
-    use Sebastian\Core\Templating\SRender;
+    use Sebastian\Core\Service\ServiceInterface;
 
-    //use Sebastian\Utility\Logger\Logger;
     use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Exception\Handler\ExceptionHandlerInterface;
-    use Sebastian\Utility\Utility\Utils;
 
     /**
      * Application
@@ -25,20 +25,24 @@
      * @since  Oct. 2015
      */
     class Application extends Context {
-        protected $kernel;
+        protected $bootCalled = false;
         protected $config;
-
-        protected $services;
         protected $exceptionHandlers;
+        protected $kernel;
+        protected $services;
 
         public function __construct(Kernel $kernel, Configuration $config = null) {
             parent::__construct();
 
-            $this->kernel = $kernel;
             $this->config = $config;
             $this->exceptionHandlers = [];
+            $this->kernel = $kernel;
+            $this->services = [];
+        }
 
+        public function boot() {
             $this->registerServices();
+            $this->bootCalled = true;
         }
 
         public function __call($method, $args) {
@@ -63,9 +67,6 @@
             return $this->{$offset};
         }
 
-        public function preHandle() {
-        }
-
         public function shutdown(Request $request, Response $response) {
             $this->connection->close();
         }
@@ -75,17 +76,17 @@
         }
 
         public function registerServices() {
-            $services = $this->config->sub('services');
-
-            foreach ($services as $key => $service) {
-                if (!$service->has('class')) continue;
-
-                $class = $service->get('class');
-                $class = ClassMapper::parseClass($class);
-                
-                $service = Injector::create($class);
-                $this["service.{$key}"] = $service;
+            foreach ($this->getConfig()->sub('services') as $name => $service) {
+                if (!$service->get('lazy', false)) {
+                    $service = Injector::instance($service->get('class'), 'Service');
+                    $this->registerService($service, $name);
+                }
             }
+        }
+
+        public function registerService(ServiceInterface $service, string $name, $aliases = []) {
+            $this->services[$name] = $service;
+            Injector::registerByClass($service);
         }
 
         public function getApplicationName() {
@@ -107,6 +108,15 @@
             return $this->config;
         }
 
+        public function getDefaultLogPath() {
+            $name = strtolower($this->config->get('application.name'));
+            return "/var/log/{$name}";
+        }
+
+        public function getLogger() {
+            //return $this->logger;
+        }
+
         public function getNamespace() {
             return $this->config->get('application.namespace');
         }
@@ -115,12 +125,7 @@
             return $this->kernel->getRequest();
         }
 
-        public function getDefaultLogPath() {
-            $name = strtolower($this->config->get('application.name'));
-            return "/var/log/{$name}";
-        }
-
-        public function getLogger() {
-            //return $this->logger;
+        public function getService(string $name) {
+            return $this->service[$name] ?? null;
         }
     }

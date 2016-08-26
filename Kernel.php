@@ -3,7 +3,8 @@
 
     define('SEBASTIAN_ROOT', __DIR__);
 
-    use APP_ROOT;
+    use \Exception;
+
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
@@ -12,19 +13,17 @@
     use Sebastian\Core\Event\ViewEvent;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\DependencyInjection\Injector;
-    use Sebastian\Utility\ClassMapper\ClassMapper;
-    use Sebastian\Utility\Configuration\Configuration;
-    use Sebastian\Utility\Configuration\Loader\YamlLoader;
-
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Firewall;
     use Sebastian\Core\Http\Response\JsonResponse;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Http\Request;
-    use Sebastian\Core\Http\Router;
+    use Sebastian\Core\Http\Router;    
 
-    
+    use Sebastian\Utility\ClassMapper\ClassMapper;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Loader\YamlLoader;
 
     /**
      * Kernel
@@ -32,11 +31,9 @@
      * @since  Oct. 2015
      */
     class Kernel extends Context {
-        private $components;
-
         protected $application;
         protected $config;
-        protected $configLoader;
+        protected $components;
         protected $environment;
         protected $mapper;
         protected $request;
@@ -51,15 +48,16 @@
             $this->request = Request::fromGlobals();
             $this->router = Router::getRouter($this);
 
+            Injector::register([
+                '@kernel,@context,$container' => $this,
+                '@request' => $this->request,
+                '@session' => $this->request->getSession(),
+                '@router' => $this->router
+            ]);
+
             $this->registerComponents([
                 new Core\CoreComponent($this, "Sebastian\\Core"),
                 new Internal\InternalComponent($this, "Sebastian\\Internal")
-            ]);
-            
-            Injector::register([
-                '@request' => $this->request,
-                '@session' => $this->request->getSession(),
-                '@router' => $this->router,
             ]);
         }
 
@@ -88,6 +86,7 @@
                 }
 
                 Injector::register(['@application' => $this->application]);
+                $this->application->boot();
             } catch (Exception $e) {
                 if ($this->templating) {
                     return new Response($this->templating->render('exception/exception', [
@@ -126,7 +125,7 @@
 
                 Injector::register(['@response' => $response]);
                 return $response;
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $request = $this->getRequest();
 
                 if ($request->isXmlHttpRequest() || strpos($request->route(), '/api/') === 0) {
@@ -136,7 +135,7 @@
                         'code' => $code
                     ], $code);
                 } else {
-                    $errorTemplate = $this->getConfig()->get('components.sebastian_extra.templating.error_template', 'internal');
+                    $errorTemplate = $this->getConfig()->get('components.Sebastian\Extra.templating.error_template', 'internal');
                     return new Response($this->get('templating')->render('exception/exception', [
                         'errorTemplate' => $errorTemplate, 
                         'exception' => $e
@@ -146,7 +145,7 @@
         }
 
         public function run($params = null) {
-            $this->application->preHandle();
+            EventBus::trigger(Event::PRE_REQUEST, new Event());
             return $this->handle($this->request);
         }
 
@@ -172,20 +171,15 @@
 
         public function registerComponent(Component $component) {
             $this->components[$component->getName()] = $component;
-            //$this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
         }
 
+        /** @todo do better */
         public function setupComponents() {
             uasort($this->components, function($componentA, $componentB) {
                 return $componentA->getWeight() > $componentB->getWeight();
             });
 
             foreach ($this->getComponents() as $key => $component) {
-                if (!$component->checkRequirements($this)) {
-                    unset($this->components[$key]);
-                    continue;
-                }
-                
                 $component->setup();
             }
         }

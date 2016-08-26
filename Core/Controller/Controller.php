@@ -4,6 +4,7 @@
     use Sebastian\Application;
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
+    use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\RedirectResponse;
@@ -34,7 +35,7 @@
             $this->renderer = $this->context->get('templating');
         }
 
-        public function render($template, array $data = []) {
+        public function render($template, array $data = []) : string {
             return $this->renderer->render($template, $data);
             //$response = new Response();
             //$response->setContent($this->renderer->render($template, $data));
@@ -42,11 +43,11 @@
             //return $response;
         }
 
-        public function redirect($url, $https = false, $code = Response::HTTP_FOUND) {
+        public function redirect($url, $https = false, $code = Response::HTTP_FOUND) : Response {
             return new RedirectResponse($url, $code);
         }
 
-        public function generateUrl($route = null, $args = []) {
+        public function generateUrl($route = null, $args = []) : string {
             return $this->getRouter()->generateUrl($route, $args);
         }
 
@@ -62,7 +63,7 @@
             return $this->getContext()->getCacheManager();
         }
 
-        public function getComponent() {
+        public function getComponent() : Component {
             return $this->component;
         }
 
@@ -70,7 +71,7 @@
             return $this->getContext()->getConnection();
         }
 
-        public function getContext() {
+        public function getContext() : ContextInterface {
             return $this->context;
         }
 

@@ -39,8 +39,10 @@
                     throw new Exception("Invalid short class: {$class}."); 
                 }
 
+                if (isset($mExtra) && $mExtra === "") $mExtra = null;
+
                 if (($component = $instance->getComponent($component)) !== null) {
-                    if ($extra ?? $mExtra ?? false) $class = implode('\\', [$extra ?? $mExtra, $class]);
+                    if ($mExtra ?? $extra ?? false) $class = implode('\\', [$mExtra ?? $extra, $class]);
                     $class = $component->getClass($class);
 
                     return [ $component, $class, $method ?? null ];
@@ -48,14 +50,8 @@
                     throw new Exception("Class {$classString} does not exist.");
                 }
             } else {
-                foreach ($instance->getComponents() as $component) {
-                    /** @todo **/
-                }
+                return null;
             }
-
-            die($classString);
-
-            return null;
         }
 
         public static function parseClass(string $classString, $extra = null) : string {

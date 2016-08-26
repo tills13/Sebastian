@@ -11,7 +11,7 @@
             $this->setWeight(0);
         }
 
-        public function checkRequirements(ContextInterface $context) {
+        public function checkRequirements() {
             return true;
         }
     }

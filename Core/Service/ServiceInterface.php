@@ -9,7 +9,7 @@
 	 * @author Tyler <tyler@sbstn.ca>
 	 * @since Oct. 2015
 	 */
-	interface Service {
+	interface ServiceInterface {
 		//public function __construct() {}
 		//abstract public function boot();
 	}

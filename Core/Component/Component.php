@@ -9,10 +9,11 @@
 
     use \ReflectionClass;
 
-    abstract class Component {
+    class Component {
         protected $config;
         protected $context;
         protected $name;
+        protected $namespace;
         protected $requirements;
         protected $weight;
         protected $path;
@@ -31,7 +32,13 @@
             $this->reflection = new ReflectionClass(get_class($this));
         }
 
-        public function setup() {}
+        public function setup() {
+            
+        }
+
+        public function shutdown() {
+
+        }
 
         public function setConfig(Configuration $config) {
             $this->config = $config;
@@ -64,11 +71,12 @@
             return implode('\\', [$this->getNamespace(), $class]);
         }
 
-        public function getComponentDirectory($trailingSlash = true) {
-            $location = $this->reflection->getFileName();
-            $location = substr($location, 0, strrpos($location, '/') + ($trailingSlash ? 1 : 0));
+        public function getComponentDirectory(bool $trailingSlash = true) : string {
+            if ($this->path === null) {
+                $this->path = dirname($this->reflection->getFileName());
+            }
 
-            return $location;
+            return $this->path . ($trailingSlash ? DIRECTORY_SEPARATOR : "");
         }
 
         public function hasController($controller = null) {
@@ -94,29 +102,15 @@
         }
 
         public function getNamespace() {
-            return $this->reflection->getNamespaceName();
+            if ($this->namespace === null) {
+                $this->namespace = $this->reflection->getNamespaceName();
+            }
+
+            return $this->namespace;
         }
 
         public function getNamespacePath() {
             return str_replace('\\', '/', $this->getNamespace());
-        }
-
-        public function setRequirements($requirements) {
-            if ($requirements instanceof Collection) {
-                $this->requirements = $requirements;
-            } else if (is_array($requirements)) {
-                $this->requirements = new Collection($requirements);
-            } else {
-                throw new \InvalidArgumentException("setRequirements requires either an array or ? extends Collection");
-            }
-        }
-
-        public function getRequirements() {
-            return $this->requirements;
-        }
-
-        public function hasRequirements() {
-            return ($this->requirements != null && $this->requirements->count() != 0);
         }
 
         public function getResourceUri($uri, $absolute = false) {
@@ -127,18 +121,26 @@
             }
         }
 
-        public function getRoutingConfig() {
-            $location = $this->getComponentDirectory() . "routing.yaml";
-            return $location;
+        public function hasRoutingFile() {
+            return file_exists($this->getComponentDirectory() . "routing.yaml") || 
+                   file_exists($this->getComponentDirectory() . "routing.yml");
+        }
 
-            throw new SebastianException("routing file not found: {$filename} or {$filename1}");
+        public function getRoutingFile() {
+            if (file_exists($this->getComponentDirectory() . "routing.yaml")) {
+                return $this->getComponentDirectory() . "routing.yaml";
+            } else if (file_exists($this->getComponentDirectory() . "routing.yml")) {
+                return $this->getComponentDirectory() . "routing.yml";
+            }
+
+            throw new SebastianException("Routing file not found, expecting {$this->getComponentDirectory()}.[yaml|yml]");
         }
 
         public function setRoutePrefix($routePrefix) {
             $this->routePrefix = $routePrefix;
         }
 
-        public function getRoutePrefix() {
+        public function getRoutePrefix() : string {
             return $this->routePrefix;
         }
 
@@ -146,7 +148,7 @@
             $this->weight = $weight;
         }
 
-        public function getWeight() {
+        public function getWeight() : int {
             return $this->weight;
         }
 
@@ -154,5 +156,7 @@
             return $this->name;
         }
 
-        abstract public function checkRequirements(ContextInterface $context);
+        public function checkRequirements() {
+            return true;
+        }
     }

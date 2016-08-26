@@ -15,14 +15,14 @@
         public function setup(Configuration $config = null) {
             $context = $this->getContext();
 
-            if ($templating = $this->getContext()->get('templating')) {
-                $context->templating->addMacro('sebastian', function() use ($templating) {
+            if (($templating = $this->getContext()->get('templating')) !== null) {
+                $templating->addMacro('sebastian', function() use ($templating) {
                     return $templating->render('javascript');
                 });
-            }
-        }
 
-        public function checkRequirements(ContextInterface $context) {
-            return true;
+                $templating->addMacro('debugToolbar', function() use ($templating) {
+                    return $templating->render('debug_toolbar');
+                });
+            }
         }
     }

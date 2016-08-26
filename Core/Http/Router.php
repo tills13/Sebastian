@@ -74,7 +74,8 @@
             ]; // add default routes
 
             $paths = $paths + array_map(function($component) {
-                return $component->getRoutingConfig();
+                if ($component->hasRoutingFile()) return $component->getRoutingFile();
+                else return null;
             }, $components);
 
             foreach ($paths as $index => $path) {
@@ -89,13 +90,14 @@
                         $this->addRouteGroup($name, $mRoute);
                     } else {
                         if (($use = $mRoute->get('use')) !== null) { // require use
-                            list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
+                            //list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
 
                             $route = $mRoute->get('route');
+                            $check = $mRoute->get('check');
                             $methods = $mRoute->get('methods', ['GET', 'POST']);
                             $requirements = $mRoute->get('requirements', []);
 
-                            $this->addRoute($name, $route, $component, $controller, $method, $requirements, $methods);
+                            $this->addRoute($name, $route, $use, $check, $requirements, $methods);
                         }
                     }
                 }
@@ -110,10 +112,11 @@
                     list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
 
                     $route = $baseRoute . $mRoute->get('route');
+                    $check = $mRoute->get('check');
                     $methods = $mRoute->get('methods', ['GET', 'POST']);
                     $requirements = $mRoute->get('requirements', []);
 
-                    $this->addRoute("{$groupName}:{$name}", $route, $component, $controller, $method, $requirements, $methods);
+                    $this->addRoute("{$groupName}:{$name}", $route, $use, $check, $requirements, $methods);
                 }
             }
         }
@@ -126,7 +129,7 @@
          * @param string $method     the method in the controller to be used
          * @param array $methods     [get,post]
          */
-        public function addRoute($name, $route, $component, $controller, $method, $requirements, $methods = null) {
+        public function addRoute($name, $route, $use, $check = null, $requirements = [], $methods = null) {
             $methods = array_map(function($value) { 
                 return strtoupper($value); 
             }, $methods ?? ['GET','POST']);
@@ -134,9 +137,8 @@
             $this->routes->set($name, [
                 'match' => $this->generateRouteRegex($route, $requirements),
                 'route' => $route,
-                'component' => $component,
-                'controller' => $controller,
-                'method' => $method,
+                'use' => $use,
+                'check' => $check,
                 'methods' => $methods
             ]);
         }
@@ -177,17 +179,35 @@
                 preg_match("/^{$route->get('match')}$/", $request->route(), $matches);
 
                 if (count($matches) > 0) {
-                    $component = $route->get('component');
-                    $method = $route->get('method') . 'Action';
+                    list($component, $controller, $method) = ClassMapper::parse($route->get('use'), 'Controller');
 
-                    $controller = Injector::instance($route->get('controller'), [
+                    if (!$component->checkRequirements($this->getContext())) {
+                        throw HttpException::forbiddenException();
+                    }
+
+                    if (($check = $route->get('check')) !== null && method_exists($component, $check)) {
+                        $arguments = Injector::resolveCallable([$component, $check], ['$controller' => $controller]);
+                        if (!call_user_func_array([$component, $check], $arguments)) {
+                            throw HttpException::forbiddenException();
+                        }
+                    }
+                    
+                    if (strpos($method, 'Action') !== (strlen($method) - strlen('Action'))) {
+                        $method = "{$method}Action";
+                    }
+                    
+                    $controller = Injector::instanceClass($controller, [
                         '@component' => $component
                     ]);
                     
-                    $reflection = new ReflectionMethod($controller, $method);
-                    $params = Injector::resolveMethod($reflection, array_merge(
-                        $request->params(), $matches
-                    ));
+                    try {
+                        $reflection = new ReflectionMethod($controller, $method);
+                        $params = Injector::resolveMethod($reflection, array_merge(
+                            $request->params(), $matches
+                        ));
+                    } catch (ReflectionException $e) {
+                        throw $e;
+                    }
 
                     return [
                         $controller,
@@ -197,7 +217,7 @@
                 }
             }
 
-            throw HttpException::notFoundException();
+            throw HttpException::notFoundException("Route not found: {$request->route()}");
         }
 
         public function getRoutes() {
