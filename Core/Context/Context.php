@@ -22,12 +22,20 @@
             return $this->extensions->get($method);
         }
 
+        public function get($id) {
+            return $this->extensions->get($id);
+        }
+
         public function __get($offset) {
             return $this->extensions->get($offset);
         }
 
         public function __set($offset, $value) {
             $this->extensions->set($offset, $value);
+        }
+
+        public function has($id): boolean {
+            return $this->extensions->has($id);
         }
 
         public function offsetExists($offset) {

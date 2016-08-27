@@ -28,9 +28,9 @@
             $session = $request->getSession();
 
             if (self::$config->get('enabled', false)) {
-                if (($token = $request->get('token') ?? (empty($request->body) || (!$request->body instanceof Collection) ? null : $request->body->get('token'))) && !$session->check()) {
+                if (($token = $request->get('token') ?? $request->headers->get('HTTP_TOKEN')) && !$session->check()) {
                     $em = self::$context->getEntityManager();
-                    $userRepo = $em->getRepository(self::$config->get('firewall.user_class'));
+                    $userRepo = $em->getRepository(self::$config->get('user_class'));
                     $user = $userRepo->find([ 'token' => $token ]);
 
                     if ($user !== null && is_array($user) && count($user) === 1) {

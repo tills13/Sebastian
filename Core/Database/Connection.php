@@ -6,6 +6,7 @@
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Database\Exception\DatabaseException;
     use Sebastian\Core\Database\Statement\PreparedStatement;
+    use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Collection\Collection;
     use Sebastian\Utility\Logger\Logger;
@@ -20,7 +21,6 @@
         protected $driver;
         protected $context;
         protected $config;
-        protected $preparedStatements;
         protected $logger;
 
         public function __construct($context, Configuration $config) {
@@ -42,31 +42,25 @@
 
             $this->logger = $context->getLogger();
             $this->cm = $context->getCacheManager();
-            $this->preparedStatements = new Collection();
-            $this->initializeDriver($config->get('driver'));
+
+            if (!$this->config->get('connection.lazy', true)) {
+                $this->initializeDriver($config->get('driver'));
+            }
         }
 
         // todo needs to handle overrides properly (for custom drivers)
         public function initializeDriver($driverClass) {
-            $driverClass = explode(':', $driverClass);
+            $class = ClassMapper::parseClass($driverClass, "Database\\PDO");
 
-            if (count($driverClass) != 2) {
-                throw new SebastianException("Connection driver config must be of the form {Namespace}:{Class}");
-            }
-
-            $driverNamespace = $driverClass[0];
-            $driverClassName = $driverClass[1];
-
-            $classPath = "\\{$driverNamespace}\\Database\\PDO\\{$driverClassName}";
             try {
-                $this->driver = new $classPath(
+                $this->driver = new $class(
                     $this, 
                     $this->config->get('username'), 
                     $this->config->get('password'), 
                     $this->config
                 );
             } catch (PDOException $e) {
-                $this->driver = null;
+                // @todo log it
             }
         }
 
@@ -79,11 +73,24 @@
         }
 
         public function beginTransaction() {
+            $this->connect();
             return $this->driver->beginTransaction();
         }
 
         public function commit() {
+            $this->connect();
             return $this->driver->commit();
+        }
+
+        public function connect() {
+            if ($this->driver) return;
+            else {
+                $this->initializeDriver($this->config->get('driver'));
+
+                if (!$this->driver) {
+                    throw new DatabaseException("Driver not set up properly.");
+                }
+            }
         }
 
         public function close() {
@@ -92,6 +99,8 @@
         }
 
         public function execute($query, $params = []) {
+            $this->connect();
+
             if (is_object($query)) $query = (string) $query;
             if ($params instanceof Collection) $params = $params->toArray();
 
@@ -101,27 +110,27 @@
         }
 
         public function prepare($query, array $options = []) {
-            if (!$this->driver) {
-                throw new DatabaseException("Driver has not been set up properly.");
-            }
-
-            $ps = $this->driver->prepare($query, $options);
-            return $ps;
+            $this->connect();
+            return $this->driver->prepare($query, $options);
         }
 
         public function quote($string, $params = PDO::PARAM_STR) {
+            $this->connect();
             return $this->driver->quote($string, $params);
         }
 
         public function rollback() {
+            $this->connect();
             return $this->driver->rollback();
         }
 
         public function inTransaction() {
+            $this->connect();
             return $this->driver->inTransaction();
         }
 
         public function getAttribute($attribute) {
+            $this->connect();
             return $this->driver->getAttribute($attribute);
         }
 
@@ -134,14 +143,17 @@
         }
 
         public function getLastError() {
+            $this->connect();
             return $this->driver->errorInfo();
         }
 
         public function getLastErrorCode() {
+            $this->connect();
             return $this->driver->errorCode();
         }
 
         public function getLastId($name = null) {
+            $this->connect();
             return $this->driver->lastInsertId($name);
         }
 

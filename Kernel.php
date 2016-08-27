@@ -3,23 +3,27 @@
 
     define('SEBASTIAN_ROOT', __DIR__);
 
-    use APP_ROOT;
+    use \Exception;
+
     use Sebastian\Core\Cache\CacheManager;
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
+    use Sebastian\Core\Event\Event;
+    use Sebastian\Core\Event\EventBus;
+    use Sebastian\Core\Event\ViewEvent;
     use Sebastian\Core\Database\Connection;
     use Sebastian\Core\DependencyInjection\Injector;
-    use Sebastian\Utility\ClassMapper\ClassMapper;
-    use Sebastian\Utility\Configuration\Configuration;
-    use Sebastian\Utility\Configuration\Loader\YamlLoader;
-
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Exception\HttpException;
     use Sebastian\Core\Http\Firewall;
     use Sebastian\Core\Http\Response\JsonResponse;
     use Sebastian\Core\Http\Response\Response;
     use Sebastian\Core\Http\Request;
-    use Sebastian\Core\Http\Router;
+    use Sebastian\Core\Http\Router;    
+
+    use Sebastian\Utility\ClassMapper\ClassMapper;
+    use Sebastian\Utility\Configuration\Configuration;
+    use Sebastian\Utility\Configuration\Loader\YamlLoader;
 
     /**
      * Kernel
@@ -28,10 +32,10 @@
      */
     class Kernel extends Context {
         protected $application;
-        protected $components;
         protected $config;
-        protected $configLoader;
+        protected $components;
         protected $environment;
+        protected $mapper;
         protected $request;
         protected $router;
 
@@ -39,23 +43,29 @@
             parent::__construct();
 
             $this->components = [];
-            $this->configLoader = new YamlLoader($this);
+            $this->config = Configuration::fromFilename("config_{$environment}.yaml");
             $this->environment = $environment;
             $this->request = Request::fromGlobals();
             $this->router = Router::getRouter($this);
 
-            Injector::init([
+            Injector::register([
+                '@kernel,@context,$container' => $this,
                 '@request' => $this->request,
-                '@Request' => $this->request,
-                '@router' => $this->router,
-                '@Router' => $this->router,
+                '@session' => $this->request->getSession(),
+                '@router' => $this->router
+            ]);
+
+            $this->registerComponents([
+                new Core\CoreComponent($this, "Sebastian\\Core"),
+                new Internal\InternalComponent($this, "Sebastian\\Internal")
             ]);
         }
 
+        /**
+         * boot is run after all components have been registered.
+         */
         public function boot() {
-            $this->config = Configuration::fromFilename("config_{$this->environment}.yaml");
-            
-            ClassMapper::init($this->getComponents());
+            $this->mapper = ClassMapper::getInstance($this);
             Firewall::init($this, $this->config->sub('firewall', []));
 
             try {
@@ -74,9 +84,12 @@
                 } else {
                     $this->application = new Application($this, $this->config);
                 }
+
+                Injector::register(['@application' => $this->application]);
+                $this->application->boot();
             } catch (Exception $e) {
                 if ($this->templating) {
-                    return new Response($this->get('templating')->render('exception/exception', [
+                    return new Response($this->templating->render('exception/exception', [
                         'exception' => $e
                     ]));
                 } else {
@@ -86,27 +99,33 @@
         }
 
         public function handle(Request $request) {
-            if ($response = Firewall::handle($request) instanceof Response) {
+            if (($response = Firewall::handle($request)) instanceof Response) {
                 return $response;
             }
 
             try {
-                $resolved = $this->router->resolve($request);
-
-                $controller = $resolved->get('controller');
-                $method = $resolved->get('method');
-                $arguments = $resolved->get('arguments');
+                list($controller, $method, $arguments) = $this->router->resolve($request); 
 
                 if (!method_exists($controller, $method)) {
                     throw new SebastianException("The requested method (<strong>{$controller}:{$method}</strong>) doesn't exist", 400);
                 }
 
-                $response = call_user_func_array([$controller, $method], $arguments->toArray());
+                $response = call_user_func_array([$controller, $method], $arguments);
+                
+                if ($response === null || !$response instanceof Response) {
+                    $event = new ViewEvent($this->request, $response);
+                    EventBus::trigger(Event::VIEW, $event);
 
-                if ($response == null || !$response instanceof Response) {
-                    //throw new SebastianException("Controller must return a response.", 1);
-                } else return $response;
-            } catch (\Exception $e) {
+                    $response = $event->getResponse();
+
+                    if ($response === null || !$response instanceof Response) {
+                        throw new SebastianException("Controller must return a response or a view");
+                    }
+                }
+
+                Injector::register(['@response' => $response]);
+                return $response;
+            } catch (Exception $e) {
                 $request = $this->getRequest();
 
                 if ($request->isXmlHttpRequest() || strpos($request->route(), '/api/') === 0) {
@@ -116,7 +135,9 @@
                         'code' => $code
                     ], $code);
                 } else {
+                    $errorTemplate = $this->getConfig()->get('components.Sebastian\Extra.templating.error_template', 'internal');
                     return new Response($this->get('templating')->render('exception/exception', [
+                        'errorTemplate' => $errorTemplate, 
                         'exception' => $e
                     ]));
                 }
@@ -124,12 +145,14 @@
         }
 
         public function run($params = null) {
-            $this->application->preHandle();
+            EventBus::trigger(Event::PRE_REQUEST, new Event());
             return $this->handle($this->request);
         }
 
         public function shutdown(Response $response) {
             $this->application->shutdown($this->request, $response);
+            $this->request->getSession()->close();            
+            EventBus::trigger(Event::SHUTDOWN, null, $this->request, $response);
         }
 
         public function getApplication() {
@@ -138,33 +161,31 @@
 
         public function registerComponents(array $components) {
             foreach ($components as $component) {
-                if (!$component instanceof Component) throw new SebastianException("component must extend Sebastian\Component");
+                if (!$component instanceof Component) {
+                    throw new SebastianException("Component must extend Sebastian\Component");
+                }
+
                 $this->registerComponent($component);
             }
         }
 
         public function registerComponent(Component $component) {
             $this->components[$component->getName()] = $component;
-            $this->components[strtolower($component->getName())] = $component; // @todo to be case insensitive?
         }
 
+        /** @todo do better */
         public function setupComponents() {
             uasort($this->components, function($componentA, $componentB) {
                 return $componentA->getWeight() > $componentB->getWeight();
             });
 
             foreach ($this->getComponents() as $key => $component) {
-                if (!$component->checkRequirements($this)) {
-                    unset($this->components[$key]);
-                    continue;
-                }
-                
-                $component->setup($this->config);
+                $component->setup();
             }
         }
 
         public function getComponent($name) {
-            return $this->components[strtolower($name)];
+            return $this->components[$name];
         }
 
         public function getComponents() {

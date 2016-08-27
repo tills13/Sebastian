@@ -4,6 +4,7 @@
     use Sebastian\Application;
     use Sebastian\Core\Component\Component;
     use Sebastian\Core\Context\Context;
+    use Sebastian\Core\Context\ContextInterface;
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Http\Request;
     use Sebastian\Core\Http\Response\RedirectResponse;
@@ -20,9 +21,9 @@
      * @since  Oct. 2015
      */
     class Controller extends Context {
-        protected $extensions;
         protected $context;
         protected $component;
+        protected $renderer;
 
         public function __construct(Application $context, Component $component) {
             if (!$context || !$component) throw new Exception("Application and Component must be provided to the controller", 1);
@@ -34,18 +35,19 @@
             $this->renderer = $this->context->get('templating');
         }
 
-        public function render($template, $data = []) {
-            $response = new Response();
-            $response->setContent($this->renderer->render($template, $data));
-            $response->sendHttpResponseCode(Response::HTTP_OK);
-            return $response;
+        public function render($template, array $data = []) : string {
+            return $this->renderer->render($template, $data);
+            //$response = new Response();
+            //$response->setContent($this->renderer->render($template, $data));
+            //$response->sendHttpResponseCode(Response::HTTP_OK);
+            //return $response;
         }
 
-        public function redirect($url, $https = false, $code = Response::HTTP_FOUND) {
+        public function redirect($url, $https = false, $code = Response::HTTP_FOUND) : Response {
             return new RedirectResponse($url, $code);
         }
 
-        public function generateUrl($route = null, $args = []) {
+        public function generateUrl($route = null, $args = []) : string {
             return $this->getRouter()->generateUrl($route, $args);
         }
 
@@ -61,7 +63,7 @@
             return $this->getContext()->getCacheManager();
         }
 
-        public function getComponent() {
+        public function getComponent() : Component {
             return $this->component;
         }
 
@@ -69,7 +71,7 @@
             return $this->getContext()->getConnection();
         }
 
-        public function getContext() {
+        public function getContext() : ContextInterface {
             return $this->context;
         }
 

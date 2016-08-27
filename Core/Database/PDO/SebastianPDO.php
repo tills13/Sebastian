@@ -25,20 +25,23 @@
                         port={$config->get('port', 5432)};
                         dbname={$config->get('dbname', 'postgres')};";
 
-            parent::__construct($dns, $username, $password, []);
-            
-            if ($config->get('connection.persistent', false)) {
-                $this->setAttribute(PDO::ATTR_PERSISTENT, true);
-            } else {
+            $options = [
+                PDO::ATTR_PERSISTENT => $config->get('connection.persistent', false),
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            ];
+
+            if (!$config->get('connection.persistent', false)) {
                 if ($config->has('connection.statement_class')) {
-                    $statementClass = ClassMapper::parse($config->get('connection.statement_class'));
+                    $statementClass = ClassMapper::parseClass($config->get('connection.statement_class'));
                 } else $statementClass = Statement::class;
                 
-                $this->setAttribute(PDO::ATTR_STATEMENT_CLASS, [$statementClass, [$this, $config->sub('connection')]]);
+                $options[PDO::ATTR_STATEMENT_CLASS] = [
+                    $statementClass, [$this, $config->sub('connection')]
+                ];
             }
-        
-            $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); // todo configurable
-            $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+            parent::__construct($dns, $username, $password, $options);
         }
 
         public function setDriverName($driverName) {

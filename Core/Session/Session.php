@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Session;
 
-    use Sebastian\Core\Model\UserInterface;
+    use Sebastian\Core\Entity\UserInterface;
     
     /**
      * Session
@@ -59,6 +59,10 @@
         public function clear($field = null) {
             if (!$field) $this->destroy();
             else unset($_SESSION[$field]);
+        }
+
+        public function close() {
+            session_write_close();
         }
 
         public function set($field, $value, $override = false) {

@@ -21,6 +21,7 @@
         public $body;
         public $get;
         public $post;
+        public $files;
 
         protected $route;
         protected $method;
@@ -46,7 +47,7 @@
             });
 
             if (strstr($_SERVER['REQUEST_URI'], '?')) {
-                $this->route = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], "?"));
+                $this->route = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], '?'));
             } else $this->route = $_SERVER['REQUEST_URI'];
 
             $this->route = urldecode($this->route);
@@ -57,10 +58,6 @@
             if ($this->server->has('HTTP_X_REQUESTED_WITH') &&
                 strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
                 //$this->type = Request::REQUEST_TYPE_JSON;
-            }
-
-            if ($this->get('view_only', false)) {
-                $this->type = Request::REQUEST_TYPE_VIEW;
             }
 
             $this->processBody();
@@ -125,14 +122,13 @@
         }
 
         public function params() {
-            return array_merge($this->post, $this->get);
+            return array_merge($this->post->toArray(), $this->get->toArray());
         }
 
         public function getSession() {
             return $this->session;
         }
 
-        // GETTERS
         public function getType() {
             return $this->type;
         }
@@ -140,6 +136,24 @@
         public function setType($type) {
             $this->type = $type;
             return $this;
+        }
+
+        public function getUploadedFiles() {
+            return $this->files;
+        }
+
+        public function saveUploadedFiles($location = 'uploads') {
+            foreach($this->getUploadedFiles() as $name => $file) {
+                $mLocation = implode(DIRECTORY_SEPARATOR, [$location, basename($file["name"])]);
+
+                if (!move_uploaded_file($file['tmp_name'], $mLocation)) {
+                    throw new Exception("Failed to save file {$file['tmp_name']}");
+                }
+            }
+        }
+        
+        public function saveUploadedFile($file, $location = 'uploads') {
+            $mLocation = implode(DIRECTORY_SEPARATOR, [$location, basename($file["name"])]);
         }
 
         public function getReferrer() {

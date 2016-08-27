@@ -18,6 +18,10 @@
             return new HttpException($message ?: $message, Response::HTTP_NOT_FOUND);
         }
 
+        public static function forbiddenException($message = "Not authorized") {
+            return new HttpException($message ?: $message, Response::HTTP_FORBIDDEN);
+        }
+
         public function getHttpResponseCode() {
             return $this->responseCode;
         }

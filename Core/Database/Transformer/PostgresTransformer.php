@@ -110,7 +110,6 @@
 
         public function transformToPhpValue($value, $dbType = null) {
             $phpTypes = $this->getPhpType($dbType);
-            //print_r ($phpTypes);
 
             if (in_array('boolean', $phpTypes)) {
                 $value = $value === "t" ? true : false;
