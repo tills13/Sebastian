@@ -21,9 +21,9 @@
      * @since  Oct. 2015
      */
     class Controller extends Context {
-        protected $extensions;
         protected $context;
         protected $component;
+        protected $renderer;
 
         public function __construct(Application $context, Component $component) {
             if (!$context || !$component) throw new Exception("Application and Component must be provided to the controller", 1);

@@ -1,5 +1,5 @@
 <?php
-    namespace Sebastian\Core\Model;
+    namespace Sebastian\Core\Entity;
 
     /**
      * EntityInterface

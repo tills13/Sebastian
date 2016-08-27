@@ -1,5 +1,5 @@
 <?php
-    namespace Sebastian\Core\Model;
+    namespace Sebastian\Core\Entity;
 
     interface UserInterface extends EntityInterface {
         public function setUsername($username);

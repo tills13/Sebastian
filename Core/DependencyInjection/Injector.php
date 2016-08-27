@@ -8,17 +8,20 @@
 
     use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Core\Http\Request;
-    use Sebastian\Core\Model\EntityInterface;
+    use Sebastian\Core\DependencyInjection\Resolver\ResolverInterface;
+    use Sebastian\Core\Entity\EntityInterface;
 
     class Injector {
         protected static $instance;
 
         protected $dependencies;
-        protected $reflection;
+        protected $resolvers;
 
-        public function __constructor() {
+        public function __construct() {
             $this->dependencies = [];
-            $this->reflection = null; 
+            $this->resolvers = [];
+
+            $this->registerResolver(new Resolver\BaseResolver());
         }
 
         public static function getInstance() : Injector {
@@ -93,23 +96,22 @@
         public function resolveParameters(array $parameters) {
             $dependencies = [];
             foreach ($parameters as $index => $parameter) {
+                $dependency = null;
                 $name = $parameter->getName();
                 $class = $parameter->getClass();
                 $param = $class ? $class->getShortName() : $name;
 
-                if ($class && is_subclass_of($class->name, EntityInterface::class)) {
-                    /*if ($this->entityManager) {
-                        $repo = $this->entityManager->getRepository($class->name);
-                        $dependency = $repo->get($this->getDependency($name));
-                        $dependencies[] = $dependency;
-                    }*/
-                } else {
-                    $dependency = $this->getDependency("@{$param}") ??
-                                $this->getDependency("{$param}") ??
-                                ($parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null);
+                $resolvers = array_filter(array_reverse($this->getResolvers()), function($resolver) use ($parameter) { 
+                    return $resolver->canResolve($parameter); 
+                });
 
-                    $dependencies[] = $dependency;
+                foreach ($resolvers ?? [] as $resolver) {
+                    if (($dependency = $resolver->resolve($this, $parameter)) !== null) {
+                        break;
+                    }
                 }
+                
+                $dependencies[] = $dependency;
             }
 
             return $dependencies;
@@ -140,5 +142,13 @@
 
         public function hasDependency($dependency) {
             return isset($this->getDependencies()[$dependency]);
+        }
+
+        public function registerResolver(ResolverInterface $resolver) {
+            $this->resolvers[] = $resolver;
+        }
+
+        public function getResolvers() {
+            return $this->resolvers;
         }
     }
