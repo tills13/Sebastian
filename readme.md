@@ -65,8 +65,8 @@ database:
 
 cache:
     enabled: true
-    #driver: Sebastian\Core:NullDriver
-    driver: Sebastian\Core:APCUDriver
+    
+    driver: Sebastian\Core:APCUDriver # Sebastian\Core:NullDriver
     key_generation_strategy: 
         object: '{class}_{component}_{id}' # defaults
         other: '{hash}' # defaults
