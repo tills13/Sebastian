@@ -157,6 +157,10 @@
             return $this->toArray();
         }
 
+        public function __debugInfo() {
+            return $this->_collection;
+        }
+
         public function __toString() {
             $inner = var_export($this->_collection);
             return "[{$inner}]";

@@ -2,7 +2,7 @@
     namespace Sebastian\Core\Database\Query\Part;
 
     class InnerJoin extends Join {
-        public function __construct($table, $alias = null, $condition = null) {
+        public function __construct($table, $condition = null) {
             parent::__construct($table, $alias, $condition);
             $this->type = Join::TYPE_INNER;
         }

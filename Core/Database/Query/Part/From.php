@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Database\Query\Part;
 
-    class From implements Part {
+    class From extends AbstractPart {
         protected $from;
 
         public function __construct($from, $alias = null) {

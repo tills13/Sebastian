@@ -1,7 +1,9 @@
 <?php
     namespace Sebastian\Core\Database\Query\Expression;
 
-    class Expression {
+    use Sebastian\Core\Database\Query\Part\AbstractPart;
+
+    class Expression extends AbstractPart {
         //const AND = " && ";
         //const OR = " || ";
         const COMMA = ",";
@@ -51,6 +53,30 @@
         public function __construct($type = Expression::TYPE_NONE, ... $elements) {
             $this->type = $type;
             $this->addElements($elements);
+        }
+
+        public function getBinds() {
+            $binds = $this->binds;
+
+            foreach($this->getElements() as $element) {
+                if ($element instanceof AbstractPart) {
+                    $binds = array_merge($binds, $element->getBinds());
+                }
+            }
+                
+            return $binds;
+        }
+
+        public function getBindTypes() {
+            $bindTypes = [];
+
+            foreach($this->getElements() as $element) {
+                if ($element instanceof AbstractPart) {
+                    $bindTypes = array_merge($bindTypes, $element->getBindTypes());
+                }
+            }
+                
+            return $bindTypes;
         }
 
         public function addElements(array $elements) {

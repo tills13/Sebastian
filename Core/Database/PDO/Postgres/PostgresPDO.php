@@ -1,10 +1,10 @@
 <?php
-    namespace Sebastian\Core\Database\PDO;
+    namespace Sebastian\Core\Database\PDO\Postgres;
 
     use \PDOException;
 
     use Sebastian\Core\Database\Connection;
-    use Sebastian\Core\Database\Statement\Statement;
+    use Sebastian\Core\Database\PDO\SebastianPDO;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Core\Database\Exception\DatabaseException;
     use Sebastian\Core\Database\Exception\UniqueConstraintException;
@@ -45,6 +45,10 @@
             }
 
             return $e;
+        }
+
+        public function getQueryBuilder() {
+            return new Query\Builder($this);
         }
 
         public function tagQuery(string $query, $depth = 1) {

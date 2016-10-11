@@ -6,6 +6,7 @@
     use Sebastian\Core\Exception\SebastianException;
     use Sebastian\Core\Database\Exception\DatabaseException;
     use Sebastian\Core\Database\Statement\PreparedStatement;
+    use Sebastian\Core\Database\Query\BuilderInterface;
     use Sebastian\Utility\ClassMapper\ClassMapper;
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Collection\Collection;
@@ -163,5 +164,9 @@
 
         public function getLogger() {
             return $this->logger;
+        }
+
+        public function getQueryBuilder() : BuilderInterface {
+            return $this->driver->getQueryBuilder();
         }
     }

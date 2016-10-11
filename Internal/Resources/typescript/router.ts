@@ -27,8 +27,12 @@ class Router {
         let hash = (location.hash || '#').split('#')[1];
     }
 
+    registerFrontRoutes(routes: { [name: string]: RouteInterface }): void {
+        this.frontRoutes = $.extend(this.frontRoutes, routes);
+    }
+
     registerRoutes(routes: { [name: string]: RouteInterface }): void {
-        this.routes = routes;
+        this.routes = $.extend(this.routes, routes);
     }
 
     private onHashChange(event: HashChangeEvent): any {

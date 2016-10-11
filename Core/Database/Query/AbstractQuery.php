@@ -2,9 +2,9 @@
     namespace Sebastian\Core\Database\Query;
 
     use Sebastian\Utility\Collection\Collection;
-    use Sebastian\Core\Database\Query\Part\Part;
+    use Sebastian\Core\Database\Query\Part\AbstractPart;
 
-    class Query implements Part {
+    abstract class AbstractQuery extends AbstractPart implements QueryInterface {
         const TYPE_SELECT = 0;
         const TYPE_DELETE = 1;
         const TYPE_UPDATE = 2;
@@ -21,49 +21,54 @@
         protected $orderBy;
         protected $into;
 
-        protected $binds;
-
         public function __construct() {
-            $this->binds = new Collection();
-
             $this->columns = new Collection();
             $this->columnAliases = new Collection();
             $this->froms = new Collection();
 
-            $this->joins = new Collection();
+            $this->joins = [];
             $this->where = null;
             $this->limit = null;
             $this->offset = 0; 
             $this->orderBy = [];
         }
 
-        public function addBind($key, $value) {
-            $this->binds->set($key, $value);
-        }
-
-        public function setBinds($binds) {
-            $binds = ($binds instanceof Collection) ? $binds : new Collection($binds);
-            $this->binds = $binds;
-        }
-
         public function getBinds() {
-            return $this->binds;
+            $joinBinds = [];
+
+            foreach($this->joins as $join) {
+                $joinBinds = array_merge($joinBinds, $join->getBinds());
+            }
+
+            return array_merge($this->binds, $joinBinds, $this->where->getBinds());
+        }
+
+        public function getBindTypes() {
+            $joinBindTypes = [];
+
+            foreach($this->joins as $join) {
+                $joinBindTypes = array_merge($joinBindTypes, $join->getBindTypes());
+            }
+
+            return array_merge($this->bindTypes, $joinBindTypes, $this->where->getBindTypes());
         }
 
         public function select(array $columns) {
-            $this->columns->extend($columns);
+            foreach ($columns as $alias => $column) {
+                $this->selectColumn($column, is_string($alias) ? $alias : null);
+            }
         }
 
-        public function selectColumn($column, $alias) {
+        public function selectColumn($column, $alias = null) {
             $this->columns->set(null, $column);
             $this->columnAliases->set($column, $alias);
         }
 
-        public function addFrom(Part $from) {
+        public function addFrom($from) {
             $this->setFrom($from);
         }
 
-        public function setFrom(Part $from) {
+        public function setFrom($from) {
             $this->froms->set(null, $from);
         }
 
@@ -80,7 +85,7 @@
         }
 
         public function join($join) {
-            $this->joins->set(null, $join);
+            $this->joins[] = $join;
         }
 
         public function setLimit($limit) {
@@ -130,40 +135,11 @@
             return $this->columnAliases;
         }
 
-        public function __toString() {
-            $query  = "SELECT \n";
-            $query .= $this->columnsToString() . "\n";
-            $query .= "FROM " . $this->fromsToString() . "\n";
-
-            foreach ($this->joins as $m => $join) {
-                $query .= $join . "\n";
-            }
-
-            if ($this->where !== null) {
-                $query .= "WHERE " . $this->where . "\n";
-            }
-
-            $orderBy = $this->getOrderBy();
-            if ($orderBy && count($orderBy) != 0) {
-                $query = $query . "ORDER BY ";
-
-                $index = 0;
-                foreach ($orderBy as $column => $direction) {
-                    $direction = strtoupper($direction);
-                    $query = $query . "{$column} {$direction}";
-                    if (++$index != count($orderBy)) $query = $query . ",";
-                    else $query = $query . "\n";
-                }
-            }
-
-            if ($this->limit) $query .= "LIMIT {$this->limit}\n";
-            if ($this->offset) $query .= "OFFSET {$this->offset}\n";
-            
-            return $query;
-        }
+        abstract public function __toString();
 
         protected function columnsToString() {
             $aliases = $this->columnAliases;
+
             $cols = array_map(function($column) use ($aliases) {
                 if ($aliases->has($column)) {
                     return "{$column} AS {$aliases->get($column)}";

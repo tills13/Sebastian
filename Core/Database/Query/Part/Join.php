@@ -1,7 +1,7 @@
 <?php
     namespace Sebastian\Core\Database\Query\Part;
 
-    class Join implements Part {
+    class Join extends AbstractPart {
         const TYPE_INNER = 0;
         const TYPE_OUTER = 1;
         const TYPE_NATURAL = 2;
@@ -15,10 +15,20 @@
         protected $alias;
         protected $condition;
 
-        public function __construct($table, $alias = null, $condition = null) {
+        public function __construct($table, $condition = null) {
             $this->type = Join::TYPE_NATURAL;
+
+            if (is_array($table)) {
+                $key = array_keys($table)[0];
+                $table = $table[$key];
+
+                if (is_string($key)) {
+                    //print ($key);
+                    $this->alias = $key;
+                }
+            }
+
             $this->table = $table;
-            $this->alias = $alias;
             $this->condition = $condition;
         }
 
@@ -36,5 +46,10 @@
 
         public function getCondition() {
             return $this->condition;
+        }
+
+        public function __toString() {
+            return "JOIN {$this->getTable()}" 
+                . ($this->hasTableAlias() ? (" AS " . $this->getTableAlias()) : "") . " ON " . $this->getCondition();
         }
     }

@@ -7,11 +7,11 @@
 
         protected $direction;
 
-        public function __construct($direction, $table, $alias = null, $condition = null) {
-            parent::__construct($table, $alias, $condition);
+        public function __construct($direction, $table, $condition = null) {
+            parent::__construct($table, $condition);
 
-            $this->type = Join::TYPE_DIRECTIONAL;
             $this->direction = $direction;
+            $this->type = Join::TYPE_DIRECTIONAL;
         }
 
         public function getDirection() {

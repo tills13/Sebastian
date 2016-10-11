@@ -71,7 +71,7 @@
 
             $paths = [
                 \APP_ROOT . DIRECTORY_SEPARATOR . "../config/routing.yaml", // master routing file, if required
-            ]; // add default routes
+            ];
 
             $paths = $paths + array_map(function($component) {
                 if ($component->hasRoutingFile()) return $component->getRoutingFile();
@@ -109,7 +109,7 @@
 
             foreach ($group->sub('routes') as $name => $mRoute) {
                 if (($use = $mRoute->get('use')) !== null) { // require use
-                    list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
+                    //list($component, $controller, $method) = ClassMapper::parse($use, 'Controller');
 
                     $route = $baseRoute . $mRoute->get('route');
                     $check = $mRoute->get('check');

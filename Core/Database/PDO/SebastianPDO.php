@@ -62,6 +62,8 @@
             return $this->logger;
         }
 
+        abstract public function getQueryBuilder();
+
         public function setTransformer(TransformerInterface $transformer) {
             $this->transformer = $transformer;
         }
