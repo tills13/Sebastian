@@ -26,24 +26,20 @@
         protected $renderer;
 
         public function __construct(Application $context, Component $component) {
-            if (!$context || !$component) throw new Exception("Application and Component must be provided to the controller", 1);
             parent::__construct();
 
             $this->context = $context;
             $this->component = $component;
 
+            // convenience
             $this->renderer = $this->context->get('templating');
         }
 
         public function render($template, array $data = []) : string {
             return $this->renderer->render($template, $data);
-            //$response = new Response();
-            //$response->setContent($this->renderer->render($template, $data));
-            //$response->sendHttpResponseCode(Response::HTTP_OK);
-            //return $response;
         }
 
-        public function redirect($url, $https = false, $code = Response::HTTP_FOUND) : Response {
+        public function redirect($url, $code = Response::HTTP_FOUND) : Response {
             return new RedirectResponse($url, $code);
         }
 
@@ -83,8 +79,8 @@
             return $this->getContext()->getSession();
         }
 
-        public function getService($serviceName) {
-            return $this->getContext()->getService($serviceName);
+        public function getService($service) {
+            return $this->getContext()->getService($service);
         }       
 
         public function __toString() {

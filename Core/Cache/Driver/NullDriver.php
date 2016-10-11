@@ -1,12 +1,12 @@
 <?php
     namespace Sebastian\Core\Cache\Driver;
 
-    class NullDriver extends Driver {
-        public function clear($cache) {
+    class NullDriver extends AbstractDriver {
+        public function cache(string $key, $thing, $override = false, $ttl = null) {
             return true;
         }
 
-        public function cache($key, $thing, $override = false, $ttl = null) {
+        public function clear($cache) {
             return true;
         }
 
@@ -18,7 +18,7 @@
             return false;
         }
 
-        public function load($key) {
+        public function load($key, bool $die = true) {
             return null;
         }
 

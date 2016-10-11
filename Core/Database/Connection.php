@@ -53,16 +53,10 @@
         public function initializeDriver($driverClass) {
             $class = ClassMapper::parseClass($driverClass, "Database\\PDO");
 
-            try {
-                $this->driver = new $class(
-                    $this, 
-                    $this->config->get('username'), 
-                    $this->config->get('password'), 
-                    $this->config
-                );
-            } catch (PDOException $e) {
-                // @todo log it
-            }
+            $username = $this->config->get('username');
+            $password = $this->config->get('password');
+
+            $this->driver = new $class($this, $username, $password, $this->config);
         }
 
         public function __call($name, $arguments) {

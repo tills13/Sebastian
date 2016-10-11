@@ -1,25 +1,17 @@
 <?php
     namespace Sebastian\Core\Cache\Driver\Volatile;
 
-    use Sebastian\Core\Cache\CacheManager;
-    use Sebastian\Core\Cache\Driver\Driver;
+    use Sebastian\Core\Cache\Driver\AbstractDriver;
 
-    class ArrayDriver extends Driver {
+    class ArrayDriver extends AbstractDriver {
         protected $cache;
 
-        public function __construct(CacheManager $manager) {
-            parent::__construct($manager);
-
+        public function init() {
             $this->cache = [];
         }
 
-        public function clear($cache) {
-            $this->cache = [];
-            return true;
-        }
-
-        public function cache($key, $thing, $override = false, $ttl = null) {
-            $ttl = $ttl ?: Driver::DEFAULT_TTL;
+        public function cache(string $key, $thing, $override = false, $ttl = null) {
+            $ttl = $ttl ?: self::DEFAULT_TTL;
 
             if ($override || (!$override && !$this->isCached($key))) {
                 $this->cache[$key] = [
@@ -34,6 +26,11 @@
             return false;
         }
 
+        public function clear($cache) {
+            $this->cache = [];
+            return true;
+        }
+
         public function invalidate($key) {
             unset($this->cache[$key]);
             return true;
@@ -44,7 +41,7 @@
             //return isset($this->cache[$key]);
         }
 
-        public function load($key) {
+        public function load($key, bool $die = true) {
             return $this->isCached($key) ? $this->cache[$key]['item'] : null;
         }
 
