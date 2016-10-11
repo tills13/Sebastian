@@ -14,7 +14,9 @@
             $class = $symbol->getClass();
             $param = $class ? $class->getShortName() : $symbol->getName();
 
-            $dependency = $injector->getDependency("@{$param}") ??
+            $dependency =
+                $injector->getDependency("\${$param}") ?? 
+                $injector->getDependency("@{$param}") ??
                 $injector->getDependency("{$param}") ??
                 ($symbol->isDefaultValueAvailable() ? $symbol->getDefaultValue() : null);
             

@@ -15,6 +15,7 @@
         protected static $instance;
 
         protected $dependencies;
+        protected $temporaryDependencies;
         protected $resolvers;
 
         public function __construct() {
@@ -37,8 +38,9 @@
 
             $reflection = new ReflectionClass($class);
             $constructor = $reflection->getConstructor();
+            $arguments = $constructor ? self::resolveMethod($constructor, $dependencies) : [];
 
-            return $reflection->newInstanceArgs(self::resolveMethod($constructor, $dependencies));
+            return $reflection->newInstanceArgs($arguments);
         }
 
         public static function instanceClass(string $class, array $dependencies = []) {
@@ -71,6 +73,7 @@
 
         public static function resolveMethod(ReflectionMethod $method = null, array $dependencies = []) {
             $instance = Injector::getInstance();
+            $instance->resetTemporaryDependencies();
             $instance->addDependencies($dependencies);
             $parameters = ($method == null) ? [] : $method->getParameters();
 
@@ -79,6 +82,7 @@
 
         public static function resolveCallable(Callable $callable, array $dependencies = []) {
             $instance = Injector::getInstance();
+            $instance->resetTemporaryDependencies();
             $instance->addDependencies($dependencies);
 
             if (is_array($callable)) {
@@ -95,6 +99,7 @@
 
         public function resolveParameters(array $parameters) {
             $dependencies = [];
+
             foreach ($parameters as $index => $parameter) {
                 $dependency = null;
                 $name = $parameter->getName();
@@ -117,15 +122,23 @@
             return $dependencies;
         }
 
+        public function addDependency($name, $value) {
+            if (strpos($name, '$') === 0) {
+                $this->temporaryDependencies[$name] = $value;
+            } else {
+                $this->dependencies[$name] = $value;
+            }
+        }
+
         public function addDependencies(array $dependencies = []) {
             $dependencies = array_change_key_case($dependencies, CASE_LOWER);
 
-            //foreach ($dependencies)
-
-            $this->setDependencies(array_merge(
-                $this->getDependencies() ?? [], 
-                $dependencies
-            ));
+            foreach($dependencies as $key => $dependency) {
+                $keys = explode(',', $key);
+                foreach ($keys as $key) {
+                    $this->addDependency($key, $dependency);
+                }
+            }
         }
 
         public function setDependencies($dependencies) {
@@ -136,8 +149,20 @@
             return $this->dependencies;
         }
 
+        public function getTemporaryDependencies() {
+            return $this->temporaryDependencies;
+        }
+
+        public function resetTemporaryDependencies() {
+            $this->temporaryDependencies = [];
+        }
+
         public function getDependency(string $dependency) {
-            return $this->getDependencies()[strtolower($dependency)] ?? null;
+            if (strpos($dependency, '$' === 0)) {
+                return $this->getTemporaryDependencies()[strtolower($dependency)] ?? null;
+            } else {
+                return $this->getDependencies()[strtolower($dependency)] ?? null;
+            }
         }
 
         public function hasDependency($dependency) {

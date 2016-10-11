@@ -69,11 +69,8 @@
             Firewall::init($this, $this->config->sub('firewall', []));
 
             try {
-                $this->cacheManager = new CacheManager($this, $this->config->sub('cache'));
+                $this->cacheManager = new CacheManager($this, $this->config->get('cache'));
                 $this->connection = new Connection($this, $this->config->sub('database'));
-
-                $this->setupComponents();
-                $this->router->loadRoutes();
 
                 if ($this->config->has('application.app_class')) {
                     $namespace = $this->config->get('application.namespace');
@@ -87,6 +84,9 @@
 
                 Injector::register(['@application' => $this->application]);
                 $this->application->boot();
+
+                $this->setupComponents();
+                $this->router->loadRoutes();
             } catch (Exception $e) {
                 if ($this->templating) {
                     return new Response($this->templating->render('exception/exception', [
