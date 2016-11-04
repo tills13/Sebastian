@@ -158,7 +158,7 @@
         }
 
         public function getDependency(string $dependency) {
-            if (strpos($dependency, '$' === 0)) {
+            if (strpos($dependency, '$') === 0) {
                 return $this->getTemporaryDependencies()[strtolower($dependency)] ?? null;
             } else {
                 return $this->getDependencies()[strtolower($dependency)] ?? null;

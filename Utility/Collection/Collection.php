@@ -158,7 +158,7 @@
         }
 
         public function __debugInfo() {
-            return $this->_collection;
+            return $this->_collection ?? [];
         }
 
         public function __toString() {

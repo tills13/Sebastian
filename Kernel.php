@@ -49,7 +49,7 @@
             $this->router = Router::getRouter($this);
 
             Injector::register([
-                '@kernel,@context,$container' => $this,
+                '@kernel,@context,@contextinterface,$container' => $this,
                 '@request' => $this->request,
                 '@session' => $this->request->getSession(),
                 '@router' => $this->router
@@ -72,6 +72,9 @@
                 $this->cacheManager = new CacheManager($this, $this->config->get('cache'));
                 $this->connection = new Connection($this, $this->config->sub('database'));
 
+                $this->setupComponents();
+                $this->router->loadRoutes();
+
                 if ($this->config->has('application.app_class')) {
                     $namespace = $this->config->get('application.namespace');
                     $appClass = $this->config->get('application.app_class');
@@ -84,9 +87,6 @@
 
                 Injector::register(['@application' => $this->application]);
                 $this->application->boot();
-
-                $this->setupComponents();
-                $this->router->loadRoutes();
             } catch (Exception $e) {
                 if ($this->templating) {
                     return new Response($this->templating->render('exception/exception', [

@@ -16,8 +16,8 @@
 
             $this->config = $config->extend([
                 'key_generation_strategy' => [
-                    'object' => '',
-                    'other' => ''
+                    'object' => '{class}_{id}',
+                    'other' => '{hash}'
                 ]
             ]);
         }

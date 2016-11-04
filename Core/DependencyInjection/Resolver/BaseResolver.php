@@ -11,15 +11,21 @@
         }
 
         public function resolve(Injector $injector, ReflectionParameter $symbol) {
-            $class = $symbol->getClass();
-            $param = $class ? $class->getShortName() : $symbol->getName();
+            $name = $symbol->getName();
+            $class = $symbol->getClass() ? $symbol->getClass()->getShortName() : null;
 
-            $dependency =
-                $injector->getDependency("\${$param}") ?? 
-                $injector->getDependency("@{$param}") ??
-                $injector->getDependency("{$param}") ??
-                ($symbol->isDefaultValueAvailable() ? $symbol->getDefaultValue() : null);
-            
-            return $dependency;
+            if (!is_null($class)) {
+                $dependency = 
+                    $injector->getDependency("@{$class}") ?? 
+                    $injector->getDependency("{$class}");
+
+                if (!is_null($dependency)) return $dependency;
+            }
+
+            $dependency = 
+                $injector->getDependency("\${$name}") ?? 
+                $injector->getDependency("{$name}");
+
+            return $dependency ?? ($symbol->isDefaultValueAvailable() ? $symbol->getDefaultValue() : null);
         }
     }

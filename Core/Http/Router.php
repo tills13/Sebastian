@@ -16,6 +16,7 @@
     use Sebastian\Utility\Configuration\Configuration;
     use Sebastian\Utility\Utility\Utils;
 
+    use \ReflectionException;
     use \ReflectionClass;
     use \ReflectionMethod;
     

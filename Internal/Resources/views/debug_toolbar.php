@@ -81,26 +81,33 @@
 
     <?php 
         $cm = $application->getCacheManager();
-        $cacheInfo = $cm->getInfo();
-        $cachedItems = array_slice($cacheInfo['cache_list'] ?? [], 0, 5);
+        $drivers = $cm->getDrivers();
+        //$cacheInfo = $driver->getInfo();
+        //
     ?>
 
     <div class="popup">
         <div class="section">Cache</div>
         <div class="body">
-            <h4>Cache <small><?=$cm->getDriver()->getName()?></small></h4>
-            <table class="table table-striped">
-                <?php foreach($cachedItems as $key => $item) { ?>
-                    <tr data-key="<?=$item['info']?>">
-                        <td data-sortable-key="<?=$item['info']?>">
-                            <a class="u" href="javascript:;" data-entity-id="<?=$item['info']?>"><?=$item['info']?></a>
-                        </td>
-                        <td>
-                            <a href="javascript:;" class="fa fa-times" onclick="admin.invalidateCache(this)"></a>
-                        </td>
-                    </tr>
-                <?php } ?>
-            </table>
+            <?php 
+                foreach ($drivers as $driver) {
+                    $cacheInfo = $driver->getInfo();
+                    $cachedItems = array_slice($cacheInfo['cache_list'] ?? [], 0, 5);
+            ?>
+                <h4>Cache <small><?=$driver->getName()?></small></h4>
+                <table class="table table-striped">
+                    <?php foreach($cachedItems as $key => $item) { ?>
+                        <tr data-key="<?=$item['info']?>">
+                            <td data-sortable-key="<?=$item['info']?>">
+                                <a class="u" href="javascript:;" data-entity-id="<?=$item['info']?>"><?=$item['info']?></a>
+                            </td>
+                            <td>
+                                <a href="javascript:;" class="fa fa-times" onclick="admin.invalidateCache(this)"></a>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                </table>
+            <?php } ?>
         </div>
     </div>
 
